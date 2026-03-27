@@ -1,0 +1,294 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>函数调用约定</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <style>
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(-10px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+    .animate-fade-in {
+      animation: fadeIn 0.3s ease-out forwards;
+    }
+    @keyframes highlight {
+      0%, 100% { border-color: rgb(59, 130, 246); }
+      50% { border-color: rgb(249, 115, 22); }
+    }
+    .highlight-anim {
+      animation: highlight 1s ease-in-out infinite;
+    }
+  </style>
+</head>
+<body class="min-h-screen bg-gray-900 text-gray-200 p-6 font-mono selection:bg-green-500/30">
+  <div class="max-w-6xl mx-auto space-y-6">
+    
+    <!-- Header -->
+    <div class="border-b border-gray-700 pb-4">
+      <div class="flex items-center justify-between">
+        <div>
+          <a href="index.html" class="text-blue-400 hover:text-blue-300 text-sm flex items-center gap-1 mb-2">
+            <i data-lucide="arrow-left" class="w-4 h-4"></i>
+            返回首页
+          </a>
+          <h1 class="text-2xl font-bold text-white flex items-center gap-2">
+            <i data-lucide="phone-call" class="w-6 h-6 text-green-400"></i>
+            函数调用约定
+          </h1>
+          <p class="text-gray-400 mt-2">
+            理解参数如何传递、栈如何管理，这是逆向和Pwn的基础。
+          </p>
+        </div>
+        <div class="flex gap-2">
+          <span class="px-3 py-1 bg-green-900/30 text-green-400 rounded-full text-sm border border-green-800">重要</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Calling Conventions -->
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+      
+      <!-- x64 System V (Linux) -->
+      <div class="bg-gray-800 rounded-lg border border-gray-700 p-6 shadow-lg">
+        <div class="flex items-center gap-2 mb-4">
+          <span class="bg-green-600 text-white px-2 py-0.5 rounded text-xs font-bold">x64 Linux</span>
+          <h3 class="text-xl font-bold text-white">System V AMD64 ABI</h3>
+        </div>
+        <div class="space-y-4">
+          <div class="bg-gray-900 rounded p-3 border border-gray-700">
+            <div class="text-green-400 font-bold mb-2">参数传递顺序</div>
+            <div class="grid grid-cols-4 gap-2">
+              <div class="bg-blue-900/40 border border-blue-700 rounded p-2 text-center">
+                <div class="text-blue-300 text-xs">第1参数</div>
+                <div class="text-white font-bold">RDI</div>
+              </div>
+              <div class="bg-blue-900/40 border border-blue-700 rounded p-2 text-center">
+                <div class="text-blue-300 text-xs">第2参数</div>
+                <div class="text-white font-bold">RSI</div>
+              </div>
+              <div class="bg-blue-900/40 border border-blue-700 rounded p-2 text-center">
+                <div class="text-blue-300 text-xs">第3参数</div>
+                <div class="text-white font-bold">RDX</div>
+              </div>
+              <div class="bg-blue-900/40 border border-blue-700 rounded p-2 text-center">
+                <div class="text-blue-300 text-xs">第4参数</div>
+                <div class="text-white font-bold">RCX</div>
+              </div>
+              <div class="bg-blue-900/40 border border-blue-700 rounded p-2 text-center">
+                <div class="text-blue-300 text-xs">第5参数</div>
+                <div class="text-white font-bold">R8</div>
+              </div>
+              <div class="bg-blue-900/40 border border-blue-700 rounded p-2 text-center">
+                <div class="text-blue-300 text-xs">第6参数</div>
+                <div class="text-white font-bold">R9</div>
+              </div>
+            </div>
+            <div class="text-gray-500 text-xs mt-2">超过6个参数会使用栈传递</div>
+          </div>
+          <div class="bg-gray-900 rounded p-3 border border-gray-700">
+            <div class="text-yellow-400 font-bold mb-2">返回值</div>
+            <div class="text-gray-300 text-sm">
+              <span class="bg-yellow-900/40 border border-yellow-700 px-2 py-0.5 rounded">RAX</span>
+              <span class="text-gray-500 mx-2">或</span>
+              <span class="bg-yellow-900/40 border border-yellow-700 px-2 py-0.5 rounded">RDX:RAX</span>
+              <span class="text-gray-500">(大数值)</span>
+            </div>
+          </div>
+          <div class="bg-gray-900 rounded p-3 border border-gray-700">
+            <div class="text-red-400 font-bold mb-2">调用者保存 (Caller-saved)</div>
+            <div class="text-gray-300 text-sm font-mono">RAX, RCX, RDX, RSI, RDI, R8, R9, R10, R11</div>
+          </div>
+          <div class="bg-gray-900 rounded p-3 border border-gray-700">
+            <div class="text-blue-400 font-bold mb-2">被调用者保存 (Callee-saved)</div>
+            <div class="text-gray-300 text-sm font-mono">RBX, RBP, R12, R13, R14, R15, RSP</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- x64 Microsoft (Windows) -->
+      <div class="bg-gray-800 rounded-lg border border-gray-700 p-6 shadow-lg">
+        <div class="flex items-center gap-2 mb-4">
+          <span class="bg-purple-600 text-white px-2 py-0.5 rounded text-xs font-bold">x64 Windows</span>
+          <h3 class="text-xl font-bold text-white">Microsoft x64 ABI</h3>
+        </div>
+        <div class="space-y-4">
+          <div class="bg-gray-900 rounded p-3 border border-gray-700">
+            <div class="text-green-400 font-bold mb-2">参数传递顺序</div>
+            <div class="grid grid-cols-4 gap-2">
+              <div class="bg-purple-900/40 border border-purple-700 rounded p-2 text-center">
+                <div class="text-purple-300 text-xs">第1参数</div>
+                <div class="text-white font-bold">RCX</div>
+              </div>
+              <div class="bg-purple-900/40 border border-purple-700 rounded p-2 text-center">
+                <div class="text-purple-300 text-xs">第2参数</div>
+                <div class="text-white font-bold">RDX</div>
+              </div>
+              <div class="bg-purple-900/40 border border-purple-700 rounded p-2 text-center">
+                <div class="text-purple-300 text-xs">第3参数</div>
+                <div class="text-white font-bold">R8</div>
+              </div>
+              <div class="bg-purple-900/40 border border-purple-700 rounded p-2 text-center">
+                <div class="text-purple-300 text-xs">第4参数</div>
+                <div class="text-white font-bold">R9</div>
+              </div>
+            </div>
+            <div class="text-gray-500 text-xs mt-2">超过4个参数会使用栈传递</div>
+          </div>
+          <div class="bg-gray-900 rounded p-3 border border-gray-700">
+            <div class="text-yellow-400 font-bold mb-2">返回值</div>
+            <div class="text-gray-300 text-sm">
+              <span class="bg-yellow-900/40 border border-yellow-700 px-2 py-0.5 rounded">RAX</span>
+              <span class="text-gray-500 mx-2">或</span>
+              <span class="bg-yellow-900/40 border border-yellow-700 px-2 py-0.5 rounded">RDX:RAX</span>
+              <span class="text-gray-500">(大数值)</span>
+            </div>
+          </div>
+          <div class="bg-gray-900 rounded p-3 border border-gray-700">
+            <div class="text-red-400 font-bold mb-2">调用者保存 (Caller-saved)</div>
+            <div class="text-gray-300 text-sm font-mono">RAX, RCX, RDX, R8, R9, R10, R11</div>
+          </div>
+          <div class="bg-gray-900 rounded p-3 border border-gray-700">
+            <div class="text-blue-400 font-bold mb-2">被调用者保存 (Callee-saved)</div>
+            <div class="text-gray-300 text-sm font-mono">RBX, RBP, RDI, RSI, R12, R13, R14, R15, RSP</div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- Function Call Animation -->
+    <div class="bg-gray-800 rounded-lg border border-gray-700 p-6 shadow-lg">
+      <h3 class="text-xl font-bold text-white mb-4 flex items-center justify-center gap-2">
+        <i data-lucide="play" class="w-5 h-5 text-blue-400"></i>
+        函数调用过程演示
+      </h3>
+      
+      <div class="flex justify-center gap-8">
+        <!-- Caller -->
+        <div class="text-center">
+          <div class="text-gray-400 text-sm mb-2">调用者 (Caller)</div>
+          <div class="bg-blue-900/40 border border-blue-700 rounded-lg p-4 w-48">
+            <div class="text-blue-300 text-xs mb-2">main 函数</div>
+            <div class="text-gray-300 text-sm font-mono text-left space-y-1">
+              <div>mov rdi, 10    ; arg1</div>
+              <div>mov rsi, 20    ; arg2</div>
+              <div class="text-yellow-400">call func</div>
+              <div class="text-green-400">; RAX = result</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Arrow -->
+        <div class="flex items-center">
+          <div class="text-4xl text-gray-500">→</div>
+        </div>
+
+        <!-- Callee -->
+        <div class="text-center">
+          <div class="text-gray-400 text-sm mb-2">被调用者 (Callee)</div>
+          <div class="bg-green-900/40 border border-green-700 rounded-lg p-4 w-48">
+            <div class="text-green-300 text-xs mb-2">func:</div>
+            <div class="text-gray-300 text-sm font-mono text-left space-y-1">
+              <div class="text-red-400">push rbp</div>
+              <div class="text-red-400">mov rbp, rsp</div>
+              <div class="text-gray-500">; RDI=10, RSI=20</div>
+              <div class="text-blue-400">add rax, rdi</div>
+              <div class="text-blue-400">add rax, rsi</div>
+              <div class="text-red-400">pop rbp</div>
+              <div class="text-yellow-400">ret</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Stack Diagram -->
+      <div class="mt-6 flex justify-center">
+        <div class="space-y-1 w-80">
+          <div class="text-center text-gray-400 text-sm mb-2">栈的变化</div>
+          <div class="flex items-center gap-2">
+            <div class="w-24 text-right text-xs text-gray-500">0x7fffffffe420</div>
+            <div class="flex-1 bg-red-900/40 border border-red-700/50 rounded p-2 text-center">
+              <span class="text-red-300 text-xs">返回地址 (call时push)</span>
+            </div>
+          </div>
+          <div class="flex items-center gap-2">
+            <div class="w-24 text-right text-xs text-gray-500">0x7fffffffe418</div>
+            <div class="flex-1 bg-blue-900/40 border border-blue-700/50 rounded p-2 text-center">
+              <span class="text-blue-300 text-xs">保存的 RBP</span>
+            </div>
+          </div>
+          <div class="flex items-center gap-2">
+            <div class="w-24 text-right text-xs text-gray-500">0x7fffffffe410</div>
+            <div class="flex-1 bg-gray-900 border border-gray-700 rounded p-2 text-center">
+              <span class="text-gray-300 text-xs">局部变量 (可选)</span>
+            </div>
+          </div>
+          <div class="flex items-center gap-2">
+            <div class="w-24 text-right text-xs text-gray-500">RSP →</div>
+            <div class="flex-1 bg-gray-700/40 border border-gray-600/50 rounded p-2 text-center">
+              <span class="text-gray-400 text-xs">栈顶</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Common Patterns -->
+    <div class="bg-gray-800 rounded-lg border border-gray-700 p-6 shadow-lg">
+      <h3 class="text-xl font-bold text-white mb-4 flex items-center gap-2">
+        <i data-lucide="code" class="w-5 h-5 text-yellow-400"></i>
+        常见汇编模式
+      </h3>
+      <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        <div class="bg-gray-900 rounded p-4 border border-gray-700">
+          <div class="text-green-400 font-bold mb-2">函数序言 (Prologue)</div>
+          <div class="text-gray-300 text-sm font-mono">
+            <div>push rbp           ; 保存调用者栈底</div>
+            <div>mov rbp, rsp      ; 建立新栈帧</div>
+            <div>sub rsp, 0x20     ; 分配局部变量空间</div>
+          </div>
+        </div>
+        <div class="bg-gray-900 rounded p-4 border border-gray-700">
+          <div class="text-red-400 font-bold mb-2">函数尾声 (Epilogue)</div>
+          <div class="text-gray-300 text-sm font-mono">
+            <div>leave              ; mov rsp, rbp; pop rbp</div>
+            <div>ret                ; 返回</div>
+          </div>
+        </div>
+        <div class="bg-gray-900 rounded p-4 border border-gray-700">
+          <div class="text-blue-400 font-bold mb-2">快速清零</div>
+          <div class="text-gray-300 text-sm font-mono">
+            <div>xor rax, rax       ; 比 mov rax, 0 更快</div>
+          </div>
+          <div class="text-gray-500 text-xs mt-1">原因: XOR同寄存器只需要1字节，且利用CPU内部并行</div>
+        </div>
+        <div class="bg-gray-900 rounded p-4 border border-gray-700">
+          <div class="text-purple-400 font-bold mb-2">获取栈地址</div>
+          <div class="text-gray-300 text-sm font-mono">
+            <div>lea rax, [rbp-8]   ; 获取局部变量地址</div>
+          </div>
+          <div class="text-gray-500 text-xs mt-1">常用于传递指针参数</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Navigation -->
+    <div class="flex justify-between">
+      <a href="asm-instructions.html" class="bg-gray-700 hover:bg-gray-600 text-white py-2 px-4 rounded font-bold transition-all">
+        ← 汇编指令详解
+      </a>
+      <a href="asm-practice.html" class="bg-green-700 hover:bg-green-600 text-white py-2 px-4 rounded font-bold transition-all">
+        实战分析 →
+      </a>
+    </div>
+
+  </div>
+
+  <script>
+    lucide.createIcons();
+  </script>
+</body>
+</html>

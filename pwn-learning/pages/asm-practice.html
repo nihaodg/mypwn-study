@@ -1,0 +1,294 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>汇编实战分析</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <style>
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(-10px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+    .animate-fade-in {
+      animation: fadeIn 0.3s ease-out forwards;
+    }
+  </style>
+</head>
+<body class="min-h-screen bg-gray-900 text-gray-200 p-6 font-mono selection:bg-green-500/30">
+  <div class="max-w-6xl mx-auto space-y-6">
+    
+    <!-- Header -->
+    <div class="border-b border-gray-700 pb-4">
+      <div class="flex items-center justify-between">
+        <div>
+          <a href="index.html" class="text-blue-400 hover:text-blue-300 text-sm flex items-center gap-1 mb-2">
+            <i data-lucide="arrow-left" class="w-4 h-4"></i>
+            返回首页
+          </a>
+          <h1 class="text-2xl font-bold text-white flex items-center gap-2">
+            <i data-lucide="file-code" class="w-6 h-6 text-green-400"></i>
+            汇编实战分析
+          </h1>
+          <p class="text-gray-400 mt-2">
+            通过真实代码示例，学习如何阅读和理解汇编代码。
+          </p>
+        </div>
+        <div class="flex gap-2">
+          <span class="px-3 py-1 bg-green-900/30 text-green-400 rounded-full text-sm border border-green-800">实战</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Example 1: Simple Function -->
+    <div class="bg-gray-800 rounded-lg border border-gray-700 p-6 shadow-lg">
+      <h3 class="text-xl font-bold text-white mb-4 flex items-center gap-2">
+        <i data-lucide="1" class="w-5 h-5 text-blue-400"></i>
+        示例1: 简单加法函数
+      </h3>
+      
+      <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <!-- C Code -->
+        <div class="bg-gray-900 rounded border border-gray-700 p-4">
+          <div class="text-blue-400 font-bold mb-2 flex items-center gap-2">
+            <i data-lucide="file-text" class="w-4 h-4"></i> C 源代码
+          </div>
+          <pre class="text-gray-300 text-sm"><code>long add(long a, long b) {
+    return a + b;
+}</code></pre>
+        </div>
+        
+        <!-- ASM -->
+        <div class="bg-gray-900 rounded border border-gray-700 p-4">
+          <div class="text-green-400 font-bold mb-2 flex items-center gap-2">
+            <i data-lucide="cpu" class="w-4 h-4"></i> x64 汇编
+          </div>
+          <pre class="text-gray-300 text-sm font-mono"><code><span class="text-yellow-400">add:</span>
+    <span class="text-blue-400">lea</span>   rax, [rdi + rsi]    ; rax = rdi + rsi
+    <span class="text-yellow-400">ret</span>                     ; 返回</code></pre>
+          <div class="text-gray-500 text-xs mt-2">
+            使用 lea 而非 add，可以在一行内完成加法和返回
+          </div>
+        </div>
+      </div>
+
+      <div class="mt-4 bg-blue-900/20 border border-blue-800/50 rounded p-4">
+        <div class="text-blue-400 font-bold mb-2">分析</div>
+        <ul class="text-gray-300 text-sm space-y-1">
+          <li>参数 a 在 <span class="text-yellow-400">RDI</span> 中（x64 Linux约定）</li>
+          <li>参数 b 在 <span class="text-yellow-400">RSI</span> 中</li>
+          <li>返回值在 <span class="text-yellow-400">RAX</span> 中</li>
+          <li>使用 <code class="text-green-400">lea</code> 可以直接计算并赋值，无需修改寄存器</li>
+        </ul>
+      </div>
+    </div>
+
+    <!-- Example 2: Function with Local Variables -->
+    <div class="bg-gray-800 rounded-lg border border-gray-700 p-6 shadow-lg">
+      <h3 class="text-xl font-bold text-white mb-4 flex items-center gap-2">
+        <i data-lucide="2" class="w-5 h-5 text-blue-400"></i>
+        示例2: 带局部变量的函数
+      </h3>
+      
+      <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <!-- C Code -->
+        <div class="bg-gray-900 rounded border border-gray-700 p-4">
+          <div class="text-blue-400 font-bold mb-2 flex items-center gap-2">
+            <i data-lucide="file-text" class="w-4 h-4"></i> C 源代码
+          </div>
+          <pre class="text-gray-300 text-sm"><code>long calc(long x, long y) {
+    long a = x * 2;     // 局部变量a
+    long b = y + 10;    // 局部变量b
+    return a + b;       // 返回 a + b
+}</code></pre>
+        </div>
+        
+        <!-- ASM -->
+        <div class="bg-gray-900 rounded border border-gray-700 p-4">
+          <div class="text-green-400 font-bold mb-2 flex items-center gap-2">
+            <i data-lucide="cpu" class="w-4 h-4"></i> x64 汇编
+          </div>
+          <pre class="text-gray-300 text-xs font-mono"><code><span class="text-yellow-400">calc:</span>
+    <span class="text-red-400">push</span>  rbp
+    <span class="text-red-400">mov</span>   rbp, rsp
+    <span class="text-red-400">sub</span>   rsp, 0x10        ; 分配 16 字节栈空间
+    
+    <span class="text-blue-400">mov</span>   [rbp-8], rdi      ; a = x * 2
+    <span class="text-blue-400">add</span>   [rbp-8], rdi      ; a += x
+    
+    <span class="text-blue-400">mov</span>   [rbp-16], rsi     ; b = y + 10  
+    <span class="text-blue-400">add</span>   [rbp-16], 10      ; b += 10
+    
+    <span class="text-blue-400">mov</span>   rax, [rbp-8]      ; rax = a
+    <span class="text-blue-400">add</span>   rax, [rbp-16]     ; rax += b
+    
+    <span class="text-red-400">leave</span>
+    <span class="text-yellow-400">ret</span></code></pre>
+        </div>
+      </div>
+
+      <div class="mt-4 grid grid-cols-1 lg:grid-cols-2 gap-4">
+        <div class="bg-green-900/20 border border-green-800/50 rounded p-3">
+          <div class="text-green-400 font-bold mb-1">栈布局</div>
+          <div class="space-y-1 font-mono text-xs">
+            <div>RBP-8  → 局部变量 a</div>
+            <div>RBP-16 → 局部变量 b</div>
+            <div>RBP    → 保存的 RBP</div>
+            <div>RBP+8  → 返回地址</div>
+          </div>
+        </div>
+        <div class="bg-yellow-900/20 border border-yellow-800/50 rounded p-3">
+          <div class="text-yellow-400 font-bold mb-1">关键指令</div>
+          <ul class="text-gray-300 text-xs space-y-1">
+            <li><code>sub rsp, 0x10</code> - 分配栈空间</li>
+            <li><code>mov [rbp-8], rdi</code> - 存储局部变量</li>
+            <li><code>leave</code> = mov rsp, rbp; pop rbp</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+
+    <!-- Example 3: If-Else -->
+    <div class="bg-gray-800 rounded-lg border border-gray-700 p-6 shadow-lg">
+      <h3 class="text-xl font-bold text-white mb-4 flex items-center gap-2">
+        <i data-lucide="3" class="w-5 h-5 text-blue-400"></i>
+        示例3: 条件分支
+      </h3>
+      
+      <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <!-- C Code -->
+        <div class="bg-gray-900 rounded border border-gray-700 p-4">
+          <div class="text-blue-400 font-bold mb-2 flex items-center gap-2">
+            <i data-lucide="file-text" class="w-4 h-4"></i> C 源代码
+          </div>
+          <pre class="text-gray-300 text-sm"><code>int abs(int x) {
+    if (x >= 0)
+        return x;
+    else
+        return -x;
+}</code></pre>
+        </div>
+        
+        <!-- ASM -->
+        <div class="bg-gray-900 rounded border border-gray-700 p-4">
+          <div class="text-green-400 font-bold mb-2 flex items-center gap-2">
+            <i data-lucide="cpu" class="w-4 h-4"></i> x64 汇编
+          </div>
+          <pre class="text-gray-300 text-xs font-mono"><code><span class="text-yellow-400">abs:</span>
+    <span class="text-blue-400">mov</span>   eax, edi          ; eax = x (EDI低32位)
+    <span class="text-blue-400">test</span>  eax, eax         ; eax & eax (设标志位)
+    <span class="text-green-400">jns</span>   .L_return        ; if SF=0 (>=0) 跳转
+    
+    <span class="text-blue-400">neg</span>   eax               ; eax = -eax
+    
+<span class="text-gray-500">.L_return:</span>
+    <span class="text-yellow-400">ret</span>                     ; 返回</code></pre>
+        </div>
+      </div>
+
+      <div class="mt-4 bg-blue-900/20 border border-blue-800/50 rounded p-4">
+        <div class="text-blue-400 font-bold mb-2">关键指令分析</div>
+        <div class="grid grid-cols-2 gap-4 text-sm">
+          <div>
+            <div class="text-yellow-400 font-bold">test eax, eax</div>
+            <div class="text-gray-400">通过AND运算设置标志位，不改变值</div>
+          </div>
+          <div>
+            <div class="text-green-400 font-bold">jns (Jump if Not Signed)</div>
+            <div class="text-gray-400">SF=0时跳转，即x>=0时跳转到返回</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Example 4: Loop -->
+    <div class="bg-gray-800 rounded-lg border border-gray-700 p-6 shadow-lg">
+      <h3 class="text-xl font-bold text-white mb-4 flex items-center gap-2">
+        <i data-lucide="4" class="w-5 h-5 text-blue-400"></i>
+        示例4: 循环
+      </h3>
+      
+      <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <!-- C Code -->
+        <div class="bg-gray-900 rounded border border-gray-700 p-4">
+          <div class="text-blue-400 font-bold mb-2 flex items-center gap-2">
+            <i data-lucide="file-text" class="w-4 h-4"></i> C 源代码
+          </div>
+          <pre class="text-gray-300 text-sm"><code>long sum(long n) {
+    long total = 0;
+    for (long i = 1; i <= n; i++)
+        total += i;
+    return total;
+}
+// sum(5) = 1+2+3+4+5 = 15</code></pre>
+        </div>
+        
+        <!-- ASM -->
+        <div class="bg-gray-900 rounded border border-gray-700 p-4">
+          <div class="text-green-400 font-bold mb-2 flex items-center gap-2">
+            <i data-lucide="cpu" class="w-4 h-4"></i> x64 汇编
+          </div>
+          <pre class="text-gray-300 text-xs font-mono"><code><span class="text-yellow-400">sum:</span>
+    <span class="text-red-400">push</span>  rbp
+    <span class="text-red-400">mov</span>   rbp, rsp
+    <span class="text-red-400">sub</span>   rsp, 0x10
+        
+    <span class="text-blue-400">mov</span>   [rbp-8], 0        ; total = 0
+    <span class="text-blue-400">mov</span>   [rbp-16], 1        ; i = 1
+    
+<span class="text-gray-500">.loop:</span>
+    <span class="text-blue-400">mov</span>   rax, [rbp-16]     ; rax = i
+    <span class="text-blue-400">cmp</span>   rax, rdi          ; i - n
+    <span class="text-green-400">jg</span>    .done             ; if i > n 跳出循环
+    
+    <span class="text-blue-400">add</span>   [rbp-8], rax      ; total += i
+    <span class="text-blue-400">add</span>   [rbp-16], 1        ; i++
+    <span class="text-green-400">jmp</span>   .loop             ; 跳转回循环
+    
+<span class="text-gray-500">.done:</span>
+    <span class="text-blue-400">mov</span>   rax, [rbp-8]      ; 返回 total
+    <span class="text-red-400">leave</span>
+    <span class="text-yellow-400">ret</span></code></pre>
+        </div>
+      </div>
+
+      <div class="mt-4 bg-purple-900/20 border border-purple-800/50 rounded p-4">
+        <div class="text-purple-400 font-bold mb-2">循环结构</div>
+        <div class="flex items-center gap-4 text-sm">
+          <div class="flex items-center gap-2">
+            <span class="bg-blue-600 px-2 py-0.5 rounded">初始化</span>
+            <span>→</span>
+          </div>
+          <div class="flex items-center gap-2">
+            <span class="bg-purple-600 px-2 py-0.5 rounded">条件判断</span>
+            <span>→</span>
+          </div>
+          <div class="flex items-center gap-2">
+            <span class="bg-green-600 px-2 py-0.5 rounded">循环体</span>
+            <span>→</span>
+          </div>
+          <div class="flex items-center gap-2">
+            <span class="bg-yellow-600 px-2 py-0.5 rounded">更新+跳转</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Navigation -->
+    <div class="flex justify-between">
+      <a href="asm-calling-convention.html" class="bg-gray-700 hover:bg-gray-600 text-white py-2 px-4 rounded font-bold transition-all">
+        ← 函数调用约定
+      </a>
+      <a href="stack-overflow.html" class="bg-red-700 hover:bg-red-600 text-white py-2 px-4 rounded font-bold transition-all">
+        开始Pwn学习 →
+      </a>
+    </div>
+
+  </div>
+
+  <script>
+    lucide.createIcons();
+  </script>
+</body>
+</html>

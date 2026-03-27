@@ -1,0 +1,276 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>汇编语言入门</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <style>
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(-10px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+    .animate-fade-in {
+      animation: fadeIn 0.3s ease-out forwards;
+    }
+    @keyframes pulse-glow {
+      0%, 100% { box-shadow: 0 0 5px rgba(59, 130, 246, 0.5); }
+      50% { box-shadow: 0 0 20px rgba(59, 130, 246, 0.8); }
+    }
+    .pulse-glow {
+      animation: pulse-glow 1.5s ease-in-out infinite;
+    }
+  </style>
+</head>
+<body class="min-h-screen bg-gray-900 text-gray-200 p-6 font-mono selection:bg-blue-500/30">
+  <div class="max-w-6xl mx-auto space-y-6">
+    
+    <!-- Header -->
+    <div class="border-b border-gray-700 pb-4">
+      <div class="flex items-center justify-between">
+        <div>
+          <a href="index.html" class="text-blue-400 hover:text-blue-300 text-sm flex items-center gap-1 mb-2">
+            <i data-lucide="arrow-left" class="w-4 h-4"></i>
+            返回首页
+          </a>
+          <h1 class="text-2xl font-bold text-white flex items-center gap-2">
+            <i data-lucide="cpu" class="w-6 h-6 text-blue-400"></i>
+            汇编语言入门
+          </h1>
+          <p class="text-gray-400 mt-2">
+            从零开始理解计算机底层运行原理，为Pwn打下坚实基础。
+          </p>
+        </div>
+        <div class="flex gap-2">
+          <span class="px-3 py-1 bg-blue-900/30 text-blue-400 rounded-full text-sm border border-blue-800">0基础</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Learning Path -->
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+      
+      <!-- Registers -->
+      <div class="bg-gray-800 rounded-lg border border-gray-700 p-6 shadow-lg">
+        <h3 class="text-xl font-bold text-white mb-4 flex items-center gap-2">
+          <i data-lucide="database" class="w-5 h-5 text-blue-400"></i>
+          寄存器基础
+        </h3>
+        <p class="text-gray-400 text-sm mb-4">
+          寄存器是CPU中最快的存储单元。64位系统主要有以下寄存器：
+        </p>
+        <div class="grid grid-cols-2 gap-3">
+          <div class="bg-gray-900 rounded p-3 border border-gray-700">
+            <div class="text-blue-400 font-bold">通用寄存器</div>
+            <div class="text-gray-300 text-sm mt-1">RAX, RBX, RCX, RDX</div>
+            <div class="text-gray-500 text-xs mt-1">R8-R15 (64位新增)</div>
+          </div>
+          <div class="bg-gray-900 rounded p-3 border border-gray-700">
+            <div class="text-green-400 font-bold">指针寄存器</div>
+            <div class="text-gray-300 text-sm mt-1">RSP (栈顶)</div>
+            <div class="text-gray-500 text-xs mt-1">RBP (栈底)</div>
+          </div>
+          <div class="bg-gray-900 rounded p-3 border border-gray-700">
+            <div class="text-yellow-400 font-bold">指令指针</div>
+            <div class="text-gray-300 text-sm mt-1">RIP</div>
+            <div class="text-gray-500 text-xs mt-1">指向下一条指令</div>
+          </div>
+          <div class="bg-gray-900 rounded p-3 border border-gray-700">
+            <div class="text-purple-400 font-bold">标志寄存器</div>
+            <div class="text-gray-300 text-sm mt-1">RFLAGS</div>
+            <div class="text-gray-500 text-xs mt-1">ZF, SF, OF等</div>
+          </div>
+        </div>
+        <div class="mt-4 p-3 bg-blue-900/20 border border-blue-800/50 rounded">
+          <div class="text-blue-400 text-sm font-bold mb-1">64位寄存器向后兼容</div>
+          <div class="text-gray-400 text-xs">
+            RAX → EAX → AX → AH/AL (层层拆分)
+          </div>
+        </div>
+      </div>
+
+      <!-- Memory -->
+      <div class="bg-gray-800 rounded-lg border border-gray-700 p-6 shadow-lg">
+        <h3 class="text-xl font-bold text-white mb-4 flex items-center gap-2">
+          <i data-lucide="server" class="w-5 h-5 text-green-400"></i>
+          内存模型
+        </h3>
+        <div class="space-y-3">
+          <div class="flex items-center gap-3">
+            <div class="w-3 h-3 bg-green-500 rounded-full"></div>
+            <span class="text-gray-300 text-sm">高地址 ← <strong>Stack</strong> (栈)</span>
+            <span class="text-gray-500 text-xs">自动管理，向低地址增长</span>
+          </div>
+          <div class="flex items-center gap-3">
+            <div class="w-3 h-3 bg-yellow-500 rounded-full"></div>
+            <span class="text-gray-300 text-sm"><strong>Heap</strong> (堆)</span>
+            <span class="text-gray-500 text-xs">动态分配，malloc/free</span>
+          </div>
+          <div class="flex items-center gap-3">
+            <div class="w-3 h-3 bg-blue-500 rounded-full"></div>
+            <span class="text-gray-300 text-sm"><strong>.data</strong></span>
+            <span class="text-gray-500 text-xs">已初始化全局变量</span>
+          </div>
+          <div class="flex items-center gap-3">
+            <div class="w-3 h-3 bg-purple-500 rounded-full"></div>
+            <span class="text-gray-300 text-sm"><strong>.bss</strong></span>
+            <span class="text-gray-500 text-xs">未初始化全局变量</span>
+          </div>
+          <div class="flex items-center gap-3">
+            <div class="w-3 h-3 bg-red-500 rounded-full"></div>
+            <span class="text-gray-300 text-sm"><strong>.text</strong></span>
+            <span class="text-gray-500 text-xs">代码段(指令)</span>
+          </div>
+          <div class="flex items-center gap-3">
+            <div class="w-3 h-3 bg-gray-500 rounded-full"></div>
+            <span class="text-gray-300 text-sm">低地址 → <strong>Kernel</strong></span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Stack Concept -->
+      <div class="bg-gray-800 rounded-lg border border-gray-700 p-6 shadow-lg">
+        <h3 class="text-xl font-bold text-white mb-4 flex items-center gap-2">
+          <i data-lucide="layers" class="w-5 h-5 text-red-400"></i>
+          栈的基本概念
+        </h3>
+        <div class="space-y-3">
+          <div class="bg-gray-900 rounded p-3 border border-gray-700">
+            <div class="text-red-400 font-bold">LIFO - 后进先出</div>
+            <div class="text-gray-400 text-sm mt-1">
+              栈就像叠盘子，最后放上去的盘子最先被拿走。
+            </div>
+          </div>
+          <div class="bg-gray-900 rounded p-3 border border-gray-700">
+            <div class="text-blue-400 font-bold">push - 入栈</div>
+            <div class="text-gray-400 text-sm mt-1">
+              <code class="text-yellow-300">push rax</code> → RSP -= 8, [RSP] = RAX
+            </div>
+          </div>
+          <div class="bg-gray-900 rounded p-3 border border-gray-700">
+            <div class="text-green-400 font-bold">pop - 出栈</div>
+            <div class="text-gray-400 text-sm mt-1">
+              <code class="text-yellow-300">pop rax</code> → RAX = [RSP], RSP += 8
+            </div>
+          </div>
+          <div class="bg-gray-900 rounded p-3 border border-gray-700">
+            <div class="text-yellow-400 font-bold">call - 函数调用</div>
+            <div class="text-gray-400 text-sm mt-1">
+              push RIP(下一条指令地址), jmp 函数
+            </div>
+          </div>
+          <div class="bg-gray-900 rounded p-3 border border-gray-700">
+            <div class="text-purple-400 font-bold">ret - 函数返回</div>
+            <div class="text-gray-400 text-sm mt-1">
+              pop RIP → 返回调用点继续执行
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Data Movement -->
+      <div class="bg-gray-800 rounded-lg border border-gray-700 p-6 shadow-lg">
+        <h3 class="text-xl font-bold text-white mb-4 flex items-center gap-2">
+          <i data-lucide="arrow-right-left" class="w-5 h-5 text-yellow-400"></i>
+          数据传送指令
+        </h3>
+        <div class="space-y-3">
+          <div class="bg-gray-900 rounded p-3 border border-gray-700">
+            <div class="text-yellow-400 font-bold">mov - 赋值</div>
+            <div class="text-gray-400 text-sm mt-1 font-mono">
+              mov rax, 10      ; rax = 10<br/>
+              mov rax, rbx     ; rax = rbx<br/>
+              mov [rsi], rax   ; [rsi] = rax (内存操作)
+            </div>
+          </div>
+          <div class="bg-gray-900 rounded p-3 border border-gray-700">
+            <div class="text-blue-400 font-bold">lea - 取地址</div>
+            <div class="text-gray-400 text-sm mt-1 font-mono">
+              lea rax, [rbx+8] ; rax = rbx + 8 (不访存)
+            </div>
+          </div>
+          <div class="bg-gray-900 rounded p-3 border border-gray-700">
+            <div class="text-green-400 font-bold">xchg - 交换</div>
+            <div class="text-gray-400 text-sm mt-1 font-mono">
+              xchg rax, rbx    ; 交换两个寄存器的值
+            </div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- Memory Visualization -->
+    <div class="bg-gray-800 rounded-lg border border-gray-700 p-6 shadow-lg">
+      <h3 class="text-xl font-bold text-white mb-4 flex items-center justify-center gap-2">
+        <i data-lucide="activity" class="w-5 h-5 text-blue-400"></i>
+        内存布局可视化
+      </h3>
+      <div class="flex justify-center">
+        <div class="w-80 space-y-1" id="memory-demo">
+          <div class="text-center text-gray-500 text-xs mb-2">高地址</div>
+          <div class="flex items-center">
+            <div class="w-20 text-right text-xs text-gray-500">0x7fff...</div>
+            <div class="flex-1 bg-red-900/40 border border-red-700/50 rounded p-2 text-center text-red-300 text-sm">
+              Stack (向下增长 ↓)
+            </div>
+          </div>
+          <div class="flex items-center">
+            <div class="w-20 text-right text-xs text-gray-500"></div>
+            <div class="flex-1 bg-yellow-900/40 border border-yellow-700/50 rounded p-2 text-center text-yellow-300 text-sm">
+              Heap
+            </div>
+          </div>
+          <div class="flex items-center">
+            <div class="w-20 text-right text-xs text-gray-500"></div>
+            <div class="flex-1 bg-blue-900/40 border border-blue-700/50 rounded p-2 text-center text-blue-300 text-sm">
+              .data (全局变量)
+            </div>
+          </div>
+          <div class="flex items-center">
+            <div class="w-20 text-right text-xs text-gray-500"></div>
+            <div class="flex-1 bg-purple-900/40 border border-purple-700/50 rounded p-2 text-center text-purple-300 text-sm">
+              .bss (未初始化)
+            </div>
+          </div>
+          <div class="flex items-center">
+            <div class="w-20 text-right text-xs text-gray-500"></div>
+            <div class="flex-1 bg-green-900/40 border border-green-700/50 rounded p-2 text-center text-green-300 text-sm">
+              .text (代码)
+            </div>
+          </div>
+          <div class="flex items-center">
+            <div class="w-20 text-right text-xs text-gray-500">0x00...</div>
+            <div class="flex-1 bg-gray-700/40 border border-gray-600/50 rounded p-2 text-center text-gray-400 text-sm">
+              Reserved
+            </div>
+          </div>
+          <div class="text-center text-gray-500 text-xs mt-2">低地址</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Next Steps -->
+    <div class="bg-blue-900/20 border border-blue-800/50 rounded-lg p-4">
+      <h3 class="text-blue-400 font-bold mb-2 flex items-center gap-2">
+        <i data-lucide="rocket" class="w-4 h-4"></i>
+        下一步学习
+      </h3>
+      <div class="flex items-center gap-4">
+        <a href="asm-instructions.html" class="bg-blue-700 hover:bg-blue-600 text-white py-2 px-4 rounded font-bold transition-all">
+          汇编指令详解 →
+        </a>
+        <a href="asm-calling-convention.html" class="bg-green-700 hover:bg-green-600 text-white py-2 px-4 rounded font-bold transition-all">
+          函数调用约定 →
+        </a>
+      </div>
+    </div>
+
+  </div>
+
+  <script>
+    lucide.createIcons();
+  </script>
+</body>
+</html>

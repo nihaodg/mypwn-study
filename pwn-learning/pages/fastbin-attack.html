@@ -1,0 +1,466 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Fastbin Attack 可视化</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <style>
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(-10px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+    .animate-fade-in {
+      animation: fadeIn 0.3s ease-out forwards;
+    }
+    @keyframes pulse-red {
+      0%, 100% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.7); }
+      50% { box-shadow: 0 0 15px 5px rgba(239, 68, 68, 0.4); }
+    }
+    .pulse-red {
+      animation: pulse-red 1.5s ease-in-out infinite;
+    }
+    @keyframes arrow-blink {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.3; }
+    }
+    .arrow-blink {
+      animation: arrow-blink 0.8s ease-in-out infinite;
+    }
+  </style>
+</head>
+<body class="min-h-screen bg-gray-900 text-gray-200 p-6 font-mono selection:bg-orange-500/30">
+  <div class="max-w-6xl mx-auto space-y-6">
+    
+    <!-- Header -->
+    <div class="border-b border-gray-700 pb-4">
+      <div class="flex items-center justify-between">
+        <div>
+          <a href="../index.html" class="text-blue-400 hover:text-blue-300 text-sm flex items-center gap-1 mb-2">
+            <i data-lucide="arrow-left" class="w-4 h-4"></i>
+            返回首页
+          </a>
+          <h1 class="text-2xl font-bold text-white flex items-center gap-2">
+            <i data-lucide="zap" class="w-6 h-6 text-orange-400"></i>
+            Fastbin Attack 可视化
+          </h1>
+          <p class="text-gray-400 mt-2">
+            深入理解 fastbin 的 LIFO 特性，学习如何通过 double-free 等手法实现对任意地址的写操作。
+          </p>
+        </div>
+        <div class="flex gap-2">
+          <span class="px-3 py-1 bg-orange-900/30 text-orange-400 rounded-full text-sm border border-orange-800">高阶</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="grid grid-cols-1 lg:grid-cols-12 gap-6">
+      
+      <!-- Left Panel -->
+      <div class="lg:col-span-5 space-y-4">
+        
+        <!-- Attack Scenario -->
+        <div class="bg-red-900/20 border border-red-800/50 rounded-lg p-4">
+          <h3 class="text-red-400 font-bold mb-2 flex items-center gap-2">
+            <i data-lucide="skull" class="w-4 h-4"></i>
+            攻击场景
+          </h3>
+          <p class="text-gray-300 text-sm">
+            目标: 在 <span class="text-yellow-400">malloc_hook</span> 附近分配一个 fake chunk，然后覆盖 malloc_hook 为 one_gadget 获取 shell。
+          </p>
+        </div>
+
+        <!-- Step-by-step Attack -->
+        <div class="bg-gray-800 rounded-lg border border-gray-700 overflow-hidden shadow-lg">
+          <div class="bg-gray-950 px-4 py-2 text-sm text-gray-400 font-semibold border-b border-gray-700 flex items-center gap-2">
+            <i data-lucide="map" class="w-4 h-4"></i> 攻击步骤
+          </div>
+          <div class="p-4 space-y-2" id="attack-steps">
+            <div class="step-item flex items-center gap-3 p-2 rounded cursor-pointer hover:bg-gray-700/50 transition-all" onclick="goToStep(1)">
+              <div class="w-8 h-8 bg-orange-900/50 rounded-full flex items-center justify-center text-orange-400 font-bold">1</div>
+              <div class="flex-1">
+                <div class="text-gray-300 text-sm font-bold">分配两个 chunk</div>
+                <div class="text-gray-500 text-xs">malloc(0x40) × 2</div>
+              </div>
+            </div>
+            <div class="step-item flex items-center gap-3 p-2 rounded cursor-pointer hover:bg-gray-700/50 transition-all" onclick="goToStep(2)">
+              <div class="w-8 h-8 bg-orange-900/50 rounded-full flex items-center justify-center text-orange-400 font-bold">2</div>
+              <div class="flex-1">
+                <div class="text-gray-300 text-sm font-bold">Double Free</div>
+                <div class="text-gray-500 text-xs">free(a); free(b); free(a)</div>
+              </div>
+            </div>
+            <div class="step-item flex items-center gap-3 p-2 rounded cursor-pointer hover:bg-gray-700/50 transition-all" onclick="goToStep(3)">
+              <div class="w-8 h-8 bg-orange-900/50 rounded-full flex items-center justify-center text-orange-400 font-bold">3</div>
+              <div class="flex-1">
+                <div class="text-gray-300 text-sm font-bold">修改 fd 指针</div>
+                <div class="text-gray-500 text-xs">溢出 a 修改 b->fd → target</div>
+              </div>
+            </div>
+            <div class="step-item flex items-center gap-3 p-2 rounded cursor-pointer hover:bg-gray-700/50 transition-all" onclick="goToStep(4)">
+              <div class="w-8 h-8 bg-orange-900/50 rounded-full flex items-center justify-center text-orange-400 font-bold">4</div>
+              <div class="flex-1">
+                <div class="text-gray-300 text-sm font-bold">分配到 target</div>
+                <div class="text-gray-500 text-xs">malloc → fake chunk at target</div>
+              </div>
+            </div>
+            <div class="step-item flex items-center gap-3 p-2 rounded cursor-pointer hover:bg-gray-700/50 transition-all" onclick="goToStep(5)">
+              <div class="w-8 h-8 bg-orange-900/50 rounded-full flex items-center justify-center text-orange-400 font-bold">5</div>
+              <div class="flex-1">
+                <div class="text-gray-300 text-sm font-bold">覆盖 malloc_hook</div>
+                <div class="text-gray-500 text-xs">写入 one_gadget 地址</div>
+              </div>
+            </div>
+          </div>
+          <div class="border-t border-gray-700 p-3 flex gap-2">
+            <button onclick="prevStep()" class="flex-1 bg-gray-700 hover:bg-gray-600 text-white py-2 px-3 rounded text-sm font-bold transition-all flex items-center justify-center gap-1">
+              <i data-lucide="chevron-left" class="w-4 h-4"></i> 上一步
+            </button>
+            <button onclick="nextStep()" class="flex-1 bg-orange-600 hover:bg-orange-500 text-white py-2 px-3 rounded text-sm font-bold transition-all flex items-center justify-center gap-1">
+              下一步 <i data-lucide="chevron-right" class="w-4 h-4"></i>
+            </button>
+          </div>
+        </div>
+
+        <!-- Current State -->
+        <div class="bg-gray-800 rounded-lg border border-gray-700 p-4">
+          <h3 class="text-orange-400 font-bold mb-2 flex items-center gap-2">
+            <i data-lucide="activity" class="w-4 h-4"></i>
+            当前操作
+          </h3>
+          <p id="current-op" class="text-gray-300 text-sm">点击"下一步"开始攻击演示</p>
+        </div>
+
+        <!-- Explanation Card -->
+        <div class="bg-blue-900/20 border border-blue-800/50 rounded-lg p-4">
+          <h3 class="text-blue-400 font-bold mb-2 flex items-center gap-2">
+            <i data-lucide="book-open" class="w-4 h-4"></i>
+            Fastbin Attack 原理
+          </h3>
+          <p id="explanation-text" class="text-gray-300 text-sm leading-relaxed">
+            Fastbin 使用单向链表和 LIFO 策略。分配时从链表头部取 chunk，释放时插入头部。如果能控制 chunk 的 fd 指针，就可以让下次 malloc 返回任意地址。
+          </p>
+        </div>
+
+        <!-- Knowledge Card -->
+        <div class="bg-gray-800 rounded-lg border border-gray-700 p-4">
+          <h3 class="text-green-400 font-bold mb-2 flex items-center gap-2">
+            <i data-lucide="lightbulb" class="w-4 h-4"></i>
+            关键知识点
+          </h3>
+          <ul class="text-gray-300 text-sm space-y-2">
+            <li class="flex items-start gap-2">
+              <span class="text-orange-400">1.</span>
+              <span>Fastbin 只有 fd 指针，不检查 bk</span>
+            </li>
+            <li class="flex items-start gap-2">
+              <span class="text-orange-400">2.</span>
+              <span>LIFO 特性：最后释放的先被分配</span>
+            </li>
+            <li class="flex items-start gap-2">
+              <span class="text-orange-400">3.</span>
+              <span>Size 检查：分配的 chunk 大小必须匹配 fastbin 索引</span>
+            </li>
+            <li class="flex items-start gap-2">
+              <span class="text-red-400">!</span>
+              <span>Double-free 允许修改链表中已有 chunk</span>
+            </li>
+          </ul>
+        </div>
+
+      </div>
+
+      <!-- Right Panel: Visualization -->
+      <div class="lg:col-span-7 space-y-4">
+        
+        <!-- Fastbin链表 -->
+        <div class="bg-gray-800 rounded-lg border border-gray-700 p-4 shadow-lg">
+          <h3 class="text-lg font-bold text-gray-300 mb-4 border-b border-gray-700 pb-2 text-center">
+            <i data-lucide="link" class="w-5 h-5 text-orange-400 inline mr-2"></i>
+            Fastbin 链表状态
+          </h3>
+          <div class="flex items-center justify-center min-h-[200px]" id="fastbin-viz"></div>
+        </div>
+
+        <!-- Heap Memory -->
+        <div class="bg-gray-800 rounded-lg border border-gray-700 p-4 shadow-lg">
+          <h3 class="text-lg font-bold text-gray-300 mb-4 border-b border-gray-700 pb-2 text-center">
+            <i data-lucide="server" class="w-5 h-5 text-orange-400 inline mr-2"></i>
+            内存布局
+          </h3>
+          <div class="space-y-2" id="memory-viz"></div>
+        </div>
+
+        <!-- Code Flow -->
+        <div class="bg-gray-800 rounded-lg border border-gray-700 overflow-hidden shadow-lg">
+          <div class="bg-gray-950 px-4 py-2 text-sm text-gray-400 font-semibold border-b border-gray-700 flex items-center gap-2">
+            <i data-lucide="code" class="w-4 h-4"></i> 代码演示
+          </div>
+          <div id="code-demo" class="p-4 text-sm font-mono bg-gray-950 space-y-1">
+            <div class="text-gray-500">// 点击"下一步"查看代码...</div>
+          </div>
+        </div>
+
+        <!-- Success Alert -->
+        <div id="success-alert" class="hidden bg-green-900/30 border border-green-500 rounded-lg p-6 text-center animate-fade-in">
+          <div class="text-5xl mb-4">$</div>
+          <h2 class="text-2xl font-bold text-green-400 mb-2">攻击成功!</h2>
+          <p class="text-gray-300">malloc_hook 已被覆盖，下次 malloc 将执行 one_gadget</p>
+        </div>
+
+      </div>
+
+    </div>
+  </div>
+
+  <script>
+    let currentStep = 0;
+    
+    const steps = [
+      {
+        op: '准备阶段：分配两个 chunk',
+        code: `char *a = malloc(0x40);  // 0x555555555780
+char *b = malloc(0x40);  // 0x5555555557d0
+// 两个 chunk 已被分配使用`,
+        explanation: '首先分配两个相同大小的 fastbin chunk。这两个 chunk 会被放入不同的 fastbin 链表。',
+        fastbin: ['b (0x5555555557d0)', 'a (0x555555555780)'],
+        memory: [
+          { addr: 0x555555555780, label: 'chunk a', size: 0x50, used: true },
+          { addr: 0x5555555557d0, label: 'chunk b', size: 0x50, used: true }
+        ]
+      },
+      {
+        op: 'Double Free：free(a); free(b); free(a)',
+        code: `free(a);
+free(b);
+free(a);  // a 再次入链！
+
+// 现在 fastbin 链表: a -> b -> a`,
+        explanation: '连续释放同一个 chunk 两次（a）。这就是"double-free"漏洞。注意现代 glibc 有防护措施，这里假设绕过。',
+        fastbin: ['a (0x555555555780)', 'b (0x5555555557d0)', 'a (0x555555555780)'],
+        memory: [
+          { addr: 0x555555555780, label: 'chunk a', size: 0x50, used: false },
+          { addr: 0x5555555557d0, label: 'chunk b', size: 0x50, used: false }
+        ]
+      },
+      {
+        op: '溢出修改 b->fd 指向目标地址',
+        code: `// 假设 a 和 b 相邻，且 a 有溢出
+memset(a, 'A', 64);  // 溢出覆盖 b 的 metadata
+*(unsigned long*)(a + 64) = 0x7ffff7fc02e5; // malloc_hook - 0x35
+
+// 现在 b.fd 指向 malloc_hook 附近`,
+        explanation: '通过缓冲区溢出修改 chunk b 的 fd 指针，指向 malloc_hook 附近（需要构造合理的 fake chunk size）。',
+        fastbin: ['b (0x5555555557d0)', '[fake at 0x7ffff7fc02e5]'],
+        memory: [
+          { addr: 0x555555555780, label: 'chunk a', size: 0x50, used: true, overflow: true, overflowTarget: 'fd→malloc_hook' },
+          { addr: 0x5555555557d0, label: 'chunk b', size: 0x50, used: false, fdModified: true },
+          { addr: 0x7ffff7fc02e5, label: 'malloc_hook附近', size: 0x50, used: false, isFake: true }
+        ]
+      },
+      {
+        op: '第一次 malloc：取出 b',
+        code: `char *c = malloc(0x40);
+// 取出 b (LIFO)
+// fastbin: a`,
+        explanation: '第一次 malloc 从 fastbin 头部取出 b，现在链表中只剩 a。',
+        fastbin: ['a (0x555555555780)'],
+        memory: [
+          { addr: 0x555555555780, label: 'chunk a', size: 0x50, used: false },
+          { addr: 0x5555555557d0, label: 'chunk b', size: 0x50, used: true, newlyAllocated: true },
+          { addr: 0x7ffff7fc02e5, label: 'malloc_hook附近', size: 0x50, used: false, isFake: true }
+        ]
+      },
+      {
+        op: '第二次 malloc：取出 a',
+        code: `char *d = malloc(0x40);
+// 取出 a
+// fastbin: [fake chunk]`,
+        explanation: '第二次 malloc 取出 a，此时 a.fd 指向我们构造的 fake chunk。',
+        fastbin: ['[fake at 0x7ffff7fc02e5]'],
+        memory: [
+          { addr: 0x555555555780, label: 'chunk a', size: 0x50, used: true, newlyAllocated: true },
+          { addr: 0x5555555557d0, label: 'chunk b', size: 0x50, used: true },
+          { addr: 0x7ffff7fc02e5, label: 'malloc_hook附近', size: 0x50, used: false, isFake: true }
+        ]
+      },
+      {
+        op: '第三次 malloc：分配到 fake chunk!',
+        code: `char *e = malloc(0x40);
+// 分配到 0x7ffff7fc02e5！
+// 现在可以写入 malloc_hook
+
+*(unsigned long*)e = 0x7ffff7fc02e0; // one_gadget
+// 下次 malloc 调用时会执行 shellcode`,
+        explanation: '第三次 malloc 返回我们构造的 fake chunk！现在我们可以写入 malloc_hook 附近的内存。写入 one_gadget 后，下次调用 malloc 就会执行它。',
+        fastbin: [],
+        memory: [
+          { addr: 0x555555555780, label: 'chunk a', size: 0x50, used: true },
+          { addr: 0x5555555557d0, label: 'chunk b', size: 0x50, used: true },
+          { addr: 0x7ffff7fc02e5, label: 'malloc_hook附近', size: 0x50, used: true, overwritten: true }
+        ],
+        success: true
+      }
+    ];
+
+    function hex(num) {
+      return '0x' + num.toString(16);
+    }
+
+    function renderFastbin() {
+      const container = document.getElementById('fastbin-viz');
+      const step = steps[currentStep];
+      
+      if (!step || step.fastbin.length === 0) {
+        container.innerHTML = '<div class="text-gray-500 text-center">Fastbin 为空</div>';
+        return;
+      }
+
+      container.innerHTML = `
+        <div class="flex items-center gap-2">
+          <div class="bg-orange-900/30 border border-orange-700/50 rounded px-3 py-2">
+            <div class="text-xs text-orange-400 mb-1">Fastbin[0]</div>
+            <div class="text-orange-300 font-bold text-sm">HEAD</div>
+          </div>
+          ${step.fastbin.map((item, idx) => `
+            <div class="flex items-center">
+              <div class="arrow-blink text-orange-400 mx-1">→</div>
+              <div class="bg-orange-900/30 border border-orange-700/50 rounded p-3 ${idx === step.fastbin.length - 1 ? 'pulse-red' : ''}">
+                <div class="text-xs text-orange-400 mb-1">Chunk</div>
+                <div class="text-orange-300 font-mono text-sm">${item}</div>
+              </div>
+            </div>
+          `).join('')}
+          <div class="flex items-center">
+            <div class="arrow-blink text-orange-400 mx-1">→</div>
+            <div class="bg-gray-900 border border-gray-700 rounded p-3">
+              <div class="text-xs text-gray-500 mb-1">NULL</div>
+              <div class="text-gray-500">0x0</div>
+            </div>
+          </div>
+        </div>
+      `;
+    }
+
+    function renderMemory() {
+      const container = document.getElementById('memory-viz');
+      const step = steps[currentStep];
+      
+      if (!step) return;
+
+      container.innerHTML = step.memory.map(chunk => {
+        let bgClass = 'bg-gray-900 border-gray-700';
+        let textClass = 'text-gray-400';
+        let extra = '';
+
+        if (chunk.used && !chunk.newlyAllocated) {
+          bgClass = 'bg-green-900/40 border-green-700';
+          textClass = 'text-green-300';
+        }
+        if (chunk.isFake) {
+          bgClass = 'bg-red-900/40 border-red-700';
+          textClass = 'text-red-300';
+          extra = '<span class="ml-2 text-xs bg-red-900/50 text-red-300 px-1 rounded">FAKE</span>';
+        }
+        if (chunk.overflow) {
+          extra = '<span class="ml-2 text-xs bg-yellow-900/50 text-yellow-300 px-1 rounded">overflow</span>';
+        }
+        if (chunk.fdModified) {
+          extra = '<span class="ml-2 text-xs bg-red-900/50 text-red-300 px-1 rounded">fd modified</span>';
+        }
+        if (chunk.newlyAllocated) {
+          bgClass = 'bg-blue-900/40 border-blue-700';
+          textClass = 'text-blue-300';
+          extra = '<span class="ml-2 text-xs bg-blue-900/50 text-blue-300 px-1 rounded">allocated</span>';
+        }
+        if (chunk.overwritten) {
+          extra = '<span class="ml-2 text-xs bg-red-900/50 text-red-300 px-1 rounded">OVERWRITTEN!</span>';
+        }
+
+        return `
+          <div class="flex items-center gap-4">
+            <div class="w-36 text-right text-xs text-gray-500 font-mono">
+              ${hex(chunk.addr)}
+            </div>
+            <div class="flex-1 border ${bgClass} rounded p-2">
+              <div class="flex justify-between items-center">
+                <span class="${textClass} text-sm">${chunk.label} ${extra}</span>
+                <span class="text-xs text-gray-500">size=0x${chunk.size.toString(16)}</span>
+              </div>
+            </div>
+          </div>
+        `;
+      }).join('');
+    }
+
+    function renderCode() {
+      const container = document.getElementById('code-demo');
+      const step = steps[currentStep];
+      
+      if (!step) return;
+      
+      container.innerHTML = step.code.split('\n').map(line => {
+        let cls = 'text-gray-300';
+        if (line.includes('//')) {
+          cls = 'text-gray-500';
+        }
+        if (line.includes('free(') || line.includes('malloc(')) {
+          cls = 'text-orange-400';
+        }
+        return `<div class="${cls}">${line}</div>`;
+      }).join('');
+    }
+
+    function updateUI() {
+      const step = steps[currentStep];
+      
+      document.getElementById('current-op').innerText = step?.op || '准备开始';
+      document.getElementById('explanation-text').innerText = step?.explanation || '';
+      
+      // Update step highlights
+      document.querySelectorAll('.step-item').forEach((el, idx) => {
+        if (idx === currentStep) {
+          el.classList.add('bg-orange-900/30', 'border', 'border-orange-700/50');
+        } else {
+          el.classList.remove('bg-orange-900/30', 'border', 'border-orange-700/50');
+        }
+      });
+      
+      // Show/hide success
+      const successAlert = document.getElementById('success-alert');
+      if (step?.success) {
+        successAlert.classList.remove('hidden');
+      } else {
+        successAlert.classList.add('hidden');
+      }
+      
+      renderFastbin();
+      renderMemory();
+      renderCode();
+      lucide.createIcons();
+    }
+
+    function nextStep() {
+      if (currentStep < steps.length - 1) {
+        currentStep++;
+        updateUI();
+      }
+    }
+
+    function prevStep() {
+      if (currentStep > 0) {
+        currentStep--;
+        updateUI();
+      }
+    }
+
+    function goToStep(idx) {
+      currentStep = idx;
+      updateUI();
+    }
+
+    updateUI();
+  </script>
+</body>
+</html>

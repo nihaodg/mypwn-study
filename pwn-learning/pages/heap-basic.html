@@ -1,0 +1,463 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>堆内存管理基础可视化</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <style>
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(-10px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+    .animate-fade-in {
+      animation: fadeIn 0.3s ease-out forwards;
+    }
+    @keyframes highlight {
+      0%, 100% { filter: brightness(1); }
+      50% { filter: brightness(1.3); }
+    }
+    .highlight {
+      animation: highlight 1s ease-in-out infinite;
+    }
+  </style>
+</head>
+<body class="min-h-screen bg-gray-900 text-gray-200 p-6 font-mono selection:bg-purple-500/30">
+  <div class="max-w-6xl mx-auto space-y-6">
+    
+    <!-- Header -->
+    <div class="border-b border-gray-700 pb-4">
+      <div class="flex items-center justify-between">
+        <div>
+          <a href="../index.html" class="text-blue-400 hover:text-blue-300 text-sm flex items-center gap-1 mb-2">
+            <i data-lucide="arrow-left" class="w-4 h-4"></i>
+            返回首页
+          </a>
+          <h1 class="text-2xl font-bold text-white flex items-center gap-2">
+            <i data-lucide="database" class="w-6 h-6 text-purple-400"></i>
+            堆内存管理基础可视化
+          </h1>
+          <p class="text-gray-400 mt-2">
+            理解 glibc 堆分配器的内部工作原理，包括 bins、chunks、fastbins 等核心概念。
+          </p>
+        </div>
+        <div class="flex gap-2">
+          <span class="px-3 py-1 bg-purple-900/30 text-purple-400 rounded-full text-sm border border-purple-800">进阶</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="grid grid-cols-1 lg:grid-cols-12 gap-6">
+      
+      <!-- Left Panel -->
+      <div class="lg:col-span-5 space-y-4">
+        
+        <!-- Operation Selector -->
+        <div class="bg-gray-800 rounded-lg border border-gray-700 overflow-hidden shadow-lg">
+          <div class="bg-gray-950 px-4 py-2 text-sm text-gray-400 font-semibold border-b border-gray-700 flex items-center gap-2">
+            <i data-lucide="cpu" class="w-4 h-4"></i> 堆操作模拟器
+          </div>
+          <div class="p-4 space-y-3">
+            <div class="grid grid-cols-2 gap-2">
+              <button onclick="executeOp('malloc-32')" class="bg-purple-700 hover:bg-purple-600 text-white py-2 px-3 rounded text-sm font-bold transition-all">
+                malloc(32)
+              </button>
+              <button onclick="executeOp('malloc-64')" class="bg-purple-700 hover:bg-purple-600 text-white py-2 px-3 rounded text-sm font-bold transition-all">
+                malloc(64)
+              </button>
+              <button onclick="executeOp('malloc-128')" class="bg-purple-700 hover:bg-purple-600 text-white py-2 px-3 rounded text-sm font-bold transition-all">
+                malloc(128)
+              </button>
+              <button onclick="executeOp('free-fast')" class="bg-red-700 hover:bg-red-600 text-white py-2 px-3 rounded text-sm font-bold transition-all">
+                free() Fastbin
+              </button>
+              <button onclick="executeOp('free-small')" class="bg-red-700 hover:bg-red-600 text-white py-2 px-3 rounded text-sm font-bold transition-all">
+                free() Smallbin
+              </button>
+              <button onclick="executeOp('free-unsort')" class="bg-red-700 hover:bg-red-600 text-white py-2 px-3 rounded text-sm font-bold transition-all">
+                free() Unsorted
+              </button>
+            </div>
+            <button onclick="resetHeap()" class="w-full bg-gray-700 hover:bg-gray-600 text-white py-2 px-3 rounded text-sm font-bold transition-all flex items-center justify-center gap-2">
+              <i data-lucide="rotate-ccw" class="w-4 h-4"></i> 重置堆状态
+            </button>
+          </div>
+        </div>
+
+        <!-- Bins Overview -->
+        <div class="bg-gray-800 rounded-lg border border-gray-700 overflow-hidden shadow-lg">
+          <div class="bg-gray-950 px-4 py-2 text-sm text-gray-400 font-semibold border-b border-gray-700 flex items-center gap-2">
+            <i data-lucide="layers" class="w-4 h-4"></i> Glibc Bins 概览
+          </div>
+          <div class="p-4 space-y-3">
+            <div class="flex items-center justify-between p-2 bg-yellow-900/20 border border-yellow-800/50 rounded">
+              <div class="flex items-center gap-2">
+                <div class="w-3 h-3 bg-yellow-500 rounded-full"></div>
+                <span class="text-yellow-400 text-sm font-bold">Fastbins</span>
+              </div>
+              <span class="text-gray-400 text-xs">LIFO, 单链表, 32-160字节</span>
+            </div>
+            <div class="flex items-center justify-between p-2 bg-green-900/20 border border-green-800/50 rounded">
+              <div class="flex items-center gap-2">
+                <div class="w-3 h-3 bg-green-500 rounded-full"></div>
+                <span class="text-green-400 text-sm font-bold">Unsorted Bin</span>
+              </div>
+              <span class="text-gray-400 text-xs">FIFO, 双链表, 首次释放</span>
+            </div>
+            <div class="flex items-center justify-between p-2 bg-blue-900/20 border border-blue-800/50 rounded">
+              <div class="flex items-center gap-2">
+                <div class="w-3 h-3 bg-blue-500 rounded-full"></div>
+                <span class="text-blue-400 text-sm font-bold">Smallbins</span>
+              </div>
+              <span class="text-gray-400 text-xs">FIFO, 双链表, < 1024字节</span>
+            </div>
+            <div class="flex items-center justify-between p-2 bg-purple-900/20 border border-purple-800/50 rounded">
+              <div class="flex items-center gap-2">
+                <div class="w-3 h-3 bg-purple-500 rounded-full"></div>
+                <span class="text-purple-400 text-sm font-bold">Largebins</span>
+              </div>
+              <span class="text-gray-400 text-xs">按大小排序, ≥ 1024字节</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Chunk Structure -->
+        <div class="bg-gray-800 rounded-lg border border-gray-700 overflow-hidden shadow-lg">
+          <div class="bg-gray-950 px-4 py-2 text-sm text-gray-400 font-semibold border-b border-gray-700 flex items-center gap-2">
+            <i data-lucide="box" class="w-4 h-4"></i> Chunk 结构
+          </div>
+          <div class="p-4">
+            <div class="grid grid-cols-2 gap-2 text-xs">
+              <div class="bg-gray-900 border border-gray-700 rounded p-2">
+                <div class="text-purple-400 font-bold">prev_size</div>
+                <div class="text-gray-500">上一chunk大小(若空闲)</div>
+              </div>
+              <div class="bg-gray-900 border border-gray-700 rounded p-2">
+                <div class="text-purple-400 font-bold">size</div>
+                <div class="text-gray-500">当前chunk大小+标志位</div>
+              </div>
+              <div class="bg-purple-900/30 border border-purple-800/50 rounded p-2 col-span-2">
+                <div class="text-purple-300 font-bold">fd / bk (空闲时)</div>
+                <div class="text-gray-500">指向其他空闲chunk的指针</div>
+              </div>
+              <div class="bg-green-900/30 border border-green-800/50 rounded p-2 col-span-2">
+                <div class="text-green-300 font-bold">user data (分配时)</div>
+                <div class="text-gray-500">实际的数据存储区域</div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Explanation Card -->
+        <div class="bg-blue-900/20 border border-blue-800/50 rounded-lg p-4">
+          <h3 class="text-blue-400 font-bold mb-2 flex items-center gap-2">
+            <i data-lucide="book-open" class="w-4 h-4"></i>
+            堆分配器原理
+          </h3>
+          <p id="explanation-text" class="text-gray-300 text-sm leading-relaxed">
+            点击上方按钮执行堆操作，观察 malloc 和 free 如何管理内存。
+          </p>
+        </div>
+
+        <!-- Knowledge Card -->
+        <div class="bg-gray-800 rounded-lg border border-gray-700 p-4">
+          <h3 class="text-green-400 font-bold mb-2 flex items-center gap-2">
+            <i data-lucide="lightbulb" class="w-4 h-4"></i>
+            关键知识点
+          </h3>
+          <ul class="text-gray-300 text-sm space-y-2">
+            <li class="flex items-start gap-2">
+              <span class="text-purple-400">1.</span>
+              <span>堆内存由 malloc/free 管理，按需分配</span>
+            </li>
+            <li class="flex items-start gap-2">
+              <span class="text-purple-400">2.</span>
+              <span>Fastbin 使用 LIFO（后进先出）策略</span>
+            </li>
+            <li class="flex items-start gap-2">
+              <span class="text-purple-400">3.</span>
+              <span>Top chunk 俗称 wilderness，永远不会被释放</span>
+            </li>
+            <li class="flex items-start gap-2">
+              <span class="text-red-400">!</span>
+              <span>free() 不会真正归还内存给系统</span>
+            </li>
+          </ul>
+        </div>
+
+      </div>
+
+      <!-- Right Panel: Visualization -->
+      <div class="lg:col-span-7 space-y-4">
+        
+        <!-- Arena View -->
+        <div class="bg-gray-800 rounded-lg border border-gray-700 p-4 shadow-lg">
+          <h3 class="text-lg font-bold text-gray-300 mb-4 border-b border-gray-700 pb-2 text-center">
+            <i data-lucide="layers" class="w-5 h-5 text-purple-400 inline mr-2"></i>
+            Main Arena & Bins
+          </h3>
+          <div class="space-y-4" id="bins-container">
+            <!-- Bins will be rendered here -->
+          </div>
+        </div>
+
+        <!-- Heap Memory View -->
+        <div class="bg-gray-800 rounded-lg border border-gray-700 p-4 shadow-lg">
+          <h3 class="text-lg font-bold text-gray-300 mb-4 border-b border-gray-700 pb-2 text-center">
+            <i data-lucide="server" class="w-5 h-5 text-purple-400 inline mr-2"></i>
+            堆内存布局 (低地址 → 高地址)
+          </h3>
+          <div class="space-y-1" id="heap-memory"></div>
+        </div>
+
+        <!-- Operation Log -->
+        <div class="bg-gray-800 rounded-lg border border-gray-700 overflow-hidden shadow-lg">
+          <div class="bg-gray-950 px-4 py-2 text-sm text-gray-400 font-semibold border-b border-gray-700 flex items-center gap-2">
+            <i data-lucide="scroll" class="w-4 h-4"></i> 操作日志
+          </div>
+          <div id="op-log" class="p-4 min-h-[100px] max-h-[200px] overflow-y-auto text-sm font-mono bg-gray-950 space-y-1">
+            <div class="text-gray-500">等待操作...</div>
+          </div>
+        </div>
+
+      </div>
+
+    </div>
+  </div>
+
+  <script>
+    let arena = {
+      fastbins: [null, null, null],
+      unsorted: [],
+      smallbins: [],
+      largebins: []
+    };
+
+    let chunks = [];
+    let nextAddr = 0x055555555750;
+    let logSeq = 0;
+
+    function hex(num) {
+      return '0x' + num.toString(16);
+    }
+
+    function addLog(msg, type = 'info') {
+      const log = document.getElementById('op-log');
+      const colors = {
+        info: 'text-gray-400',
+        success: 'text-green-400',
+        warning: 'text-yellow-400',
+        danger: 'text-red-400'
+      };
+      
+      log.innerHTML = `<div class="${colors[type]}">[${++logSeq}] ${msg}</div>` + log.innerHTML;
+    }
+
+    function executeOp(op) {
+      switch(op) {
+        case 'malloc-32':
+          malloc(32);
+          break;
+        case 'malloc-64':
+          malloc(64);
+          break;
+        case 'malloc-128':
+          malloc(128);
+          break;
+        case 'free-fast':
+          if (chunks.length > 0) free(chunks[chunks.length - 1], 'fast');
+          break;
+        case 'free-small':
+          if (chunks.length > 0) free(chunks[chunks.length - 1], 'small');
+          break;
+        case 'free-unsort':
+          if (chunks.length > 0) free(chunks[chunks.length - 1], 'unsort');
+          break;
+      }
+      render();
+    }
+
+    function malloc(size) {
+      // Calculate actual chunk size (aligned to 16 bytes)
+      const chunkSize = Math.max(size + 16, 32);
+      const fastMax = 160;
+      const smallMax = 1024;
+
+      const chunk = {
+        addr: nextAddr,
+        size: chunkSize,
+        realSize: size,
+        data: '0x' + Array(8).fill('00').join(''),
+        used: true,
+        type: size <= fastMax ? 'fast' : (size <= smallMax ? 'small' : 'large')
+      };
+
+      chunks.push(chunk);
+      nextAddr += chunkSize + 0x10; // Add some padding
+
+      addLog(`malloc(${size}) → ${hex(chunk.addr)} (chunk_size=${chunkSize})`, 'success');
+      
+      // Simulate fastbin behavior
+      if (chunk.type === 'fast') {
+        arena.fastbins[0] = chunk;
+        addLog(`  → 放入 Fastbin[0] (LIFO)`, 'info');
+      }
+    }
+
+    function free(chunk, binType) {
+      if (!chunk) return;
+      
+      chunk.used = false;
+      
+      if (binType === 'fast' || chunk.type === 'fast') {
+        arena.fastbins.unshift(chunk);
+        arena.fastbins.pop();
+        addLog(`free(${hex(chunk.addr)}) → Fastbin[0] (LIFO)`, 'warning');
+      } else if (binType === 'small' || chunk.type === 'small') {
+        arena.smallbins.unshift(chunk);
+        addLog(`free(${hex(chunk.addr)}) → Smallbin (FIFO)`, 'warning');
+      } else {
+        arena.unsorted.unshift(chunk);
+        addLog(`free(${hex(chunk.addr)}) → Unsorted Bin`, 'warning');
+      }
+      
+      // Remove from chunks if needed
+      const idx = chunks.indexOf(chunk);
+      if (idx > -1) chunks.splice(idx, 1);
+    }
+
+    function resetHeap() {
+      arena = {
+        fastbins: [null, null, null],
+        unsorted: [],
+        smallbins: [],
+        largebins: []
+      };
+      chunks = [];
+      nextAddr = 0x055555555750;
+      logSeq = 0;
+      document.getElementById('op-log').innerHTML = '<div class="text-gray-500">堆状态已重置...</div>';
+      render();
+    }
+
+    function render() {
+      renderBins();
+      renderHeapMemory();
+      lucide.createIcons();
+    }
+
+    function renderBins() {
+      const container = document.getElementById('bins-container');
+      
+      container.innerHTML = `
+        <!-- Fastbins -->
+        <div class="bg-yellow-900/20 border border-yellow-800/50 rounded-lg p-3">
+          <div class="flex items-center gap-2 mb-3">
+            <div class="w-3 h-3 bg-yellow-500 rounded-full"></div>
+            <h4 class="text-yellow-400 font-bold">Fastbins (LIFO)</h4>
+          </div>
+          <div class="flex items-center gap-2">
+            ${[0, 1, 2].map(i => {
+              const chunk = arena.fastbins[i];
+              const sizeLabel = [32, 64, 96][i];
+              return `
+                <div class="flex-1 text-center">
+                  <div class="text-xs text-gray-500 mb-1">Fastbin[${i}] (${sizeLabel}B)</div>
+                  <div class="bg-yellow-950/50 border border-yellow-700/50 rounded p-2 min-h-[50px] flex items-center justify-center">
+                    ${chunk ? `<span class="text-yellow-300 text-xs">${hex(chunk.addr)}</span>` : '<span class="text-gray-600 text-xs">NULL</span>'}
+                  </div>
+                </div>
+              `;
+            }).join('')}
+          </div>
+          <div class="text-xs text-gray-500 mt-2">特性: 单链表, 最高地址优先分配, 不合并</div>
+        </div>
+
+        <!-- Unsorted Bin -->
+        <div class="bg-green-900/20 border border-green-800/50 rounded-lg p-3">
+          <div class="flex items-center gap-2 mb-3">
+            <div class="w-3 h-3 bg-green-500 rounded-full"></div>
+            <h4 class="text-green-400 font-bold">Unsorted Bin (FIFO)</h4>
+          </div>
+          <div class="flex items-center gap-2 overflow-x-auto">
+            ${arena.unsorted.length === 0 ? 
+              '<div class="text-gray-600 text-sm">空</div>' :
+              arena.unsorted.map(chunk => `
+                <div class="bg-green-950/50 border border-green-700/50 rounded p-2 text-center min-w-[80px]">
+                  <div class="text-green-300 text-xs">${hex(chunk.addr)}</div>
+                  <div class="text-xs text-gray-500">size=${chunk.size}</div>
+                </div>
+              `).join('<span class="text-gray-600">↔</span>')
+            }
+          </div>
+          <div class="text-xs text-gray-500 mt-2">特性: 双链表, 循环链表, 分配时可能分裂</div>
+        </div>
+
+        <!-- Smallbins -->
+        <div class="bg-blue-900/20 border border-blue-800/50 rounded-lg p-3">
+          <div class="flex items-center gap-2 mb-3">
+            <div class="w-3 h-3 bg-blue-500 rounded-full"></div>
+            <h4 class="text-blue-400 font-bold">Smallbins (FIFO)</h4>
+          </div>
+          <div class="flex items-center gap-2 overflow-x-auto">
+            ${arena.smallbins.length === 0 ? 
+              '<div class="text-gray-600 text-sm">空</div>' :
+              arena.smallbins.map(chunk => `
+                <div class="bg-blue-950/50 border border-blue-700/50 rounded p-2 text-center min-w-[80px]">
+                  <div class="text-blue-300 text-xs">${hex(chunk.addr)}</div>
+                  <div class="text-xs text-gray-500">size=${chunk.size}</div>
+                </div>
+              `).join('<span class="text-gray-600">↔</span>')
+            }
+          </div>
+          <div class="text-xs text-gray-500 mt-2">特性: 64个bin, 大小128-1024字节, 两两相邻</div>
+        </div>
+      `;
+    }
+
+    function renderHeapMemory() {
+      const container = document.getElementById('heap-memory');
+      
+      if (chunks.length === 0) {
+        container.innerHTML = '<div class="text-gray-500 text-center py-8">堆内存空闲中...</div>';
+        return;
+      }
+
+      container.innerHTML = chunks.map(chunk => {
+        const isFast = chunk.type === 'fast';
+        const isSmall = chunk.type === 'small';
+        
+        let bgClass = 'bg-purple-900/40 border-purple-700';
+        if (isFast) {
+          bgClass = 'bg-yellow-900/40 border-yellow-700';
+        } else if (isSmall) {
+          bgClass = 'bg-green-900/40 border-green-700';
+        }
+
+        return `
+          <div class="flex items-center gap-4 ${chunk.used ? '' : 'opacity-60'}">
+            <div class="w-32 text-right text-xs text-gray-500 font-mono">
+              ${hex(chunk.addr)}
+            </div>
+            <div class="flex-1 border ${bgClass} rounded p-2">
+              <div class="flex justify-between items-center">
+                <div>
+                  <span class="text-xs ${isFast ? 'text-yellow-400' : isSmall ? 'text-green-400' : 'text-purple-400'} font-bold">
+                    ${isFast ? '[FAST]' : isSmall ? '[SMALL]' : '[LARGE]'}
+                  </span>
+                  <span class="text-gray-300 text-sm ml-2">size=${chunk.size}, used=${chunk.used}</span>
+                </div>
+                <div class="text-xs text-gray-500">${chunk.addr === nextAddr - chunk.size - 0x10 ? 'Top Chunk' : ''}</div>
+              </div>
+            </div>
+          </div>
+        `;
+      }).join('');
+    }
+
+    render();
+    lucide.createIcons();
+  </script>
+</body>
+</html>

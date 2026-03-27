@@ -1,0 +1,442 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>栈迁移可视化</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <style>
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(-10px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+    .animate-fade-in {
+      animation: fadeIn 0.3s ease-out forwards;
+    }
+    @keyframes flash {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.3; }
+    }
+    .flash {
+      animation: flash 0.5s ease-in-out 3;
+    }
+  </style>
+</head>
+<body class="min-h-screen bg-gray-900 text-gray-200 p-6 font-mono selection:bg-cyan-500/30">
+  <div class="max-w-6xl mx-auto space-y-6">
+    
+    <!-- Header -->
+    <div class="border-b border-gray-700 pb-4">
+      <div class="flex items-center justify-between">
+        <div>
+          <a href="../index.html" class="text-blue-400 hover:text-blue-300 text-sm flex items-center gap-1 mb-2">
+            <i data-lucide="arrow-left" class="w-4 h-4"></i>
+            返回首页
+          </a>
+          <h1 class="text-2xl font-bold text-white flex items-center gap-2">
+            <i data-lucide="move" class="w-6 h-6 text-cyan-400"></i>
+            栈迁移可视化
+          </h1>
+          <p class="text-gray-400 mt-2">
+            当栈空间受限时，学习如何将栈迁移到其他内存区域，构建 ROP 链实现控制流劫持。
+          </p>
+        </div>
+        <div class="flex gap-2">
+          <span class="px-3 py-1 bg-cyan-900/30 text-cyan-400 rounded-full text-sm border border-cyan-800">高阶</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="grid grid-cols-1 lg:grid-cols-12 gap-6">
+      
+      <!-- Left Panel -->
+      <div class="lg:col-span-5 space-y-4">
+        
+        <!-- Problem Scenario -->
+        <div class="bg-red-900/20 border border-red-800/50 rounded-lg p-4">
+          <h3 class="text-red-400 font-bold mb-2 flex items-center gap-2">
+            <i data-lucide="alert-circle" class="w-4 h-4"></i>
+            问题场景
+          </h3>
+          <p class="text-gray-300 text-sm">
+            溢出空间有限，无法一次性布置完整的 ROP 链。需要先迁移栈到更大的内存区域。
+          </p>
+        </div>
+
+        <!-- Step-by-step -->
+        <div class="bg-gray-800 rounded-lg border border-gray-700 overflow-hidden shadow-lg">
+          <div class="bg-gray-950 px-4 py-2 text-sm text-gray-400 font-semibold border-b border-gray-700 flex items-center gap-2">
+            <i data-lucide="map" class="w-4 h-4"></i> 迁移步骤
+          </div>
+          <div class="p-4 space-y-2" id="attack-steps">
+            <div class="step-item flex items-center gap-3 p-2 rounded cursor-pointer hover:bg-gray-700/50 transition-all" onclick="goToStep(0)">
+              <div class="w-8 h-8 bg-cyan-900/50 rounded-full flex items-center justify-center text-cyan-400 font-bold">1</div>
+              <div class="flex-1">
+                <div class="text-gray-300 text-sm font-bold">原栈溢出</div>
+                <div class="text-gray-500 text-xs">溢出覆盖返回地址</div>
+              </div>
+            </div>
+            <div class="step-item flex items-center gap-3 p-2 rounded cursor-pointer hover:bg-gray-700/50 transition-all" onclick="goToStep(1)">
+              <div class="w-8 h-8 bg-cyan-900/50 rounded-full flex items-center justify-center text-cyan-400 font-bold">2</div>
+              <div class="flex-1">
+                <div class="text-gray-300 text-sm font-bold">跳转到 Stack Pivot</div>
+                <div class="text-gray-500 text-xs">ROP: leave; ret → mov rsp, rbp</div>
+              </div>
+            </div>
+            <div class="step-item flex items-center gap-3 p-2 rounded cursor-pointer hover:bg-gray-700/50 transition-all" onclick="goToStep(2)">
+              <div class="w-8 h-8 bg-cyan-900/50 rounded-full flex items-center justify-center text-cyan-400 font-bold">3</div>
+              <div class="flex-1">
+                <div class="text-gray-300 text-sm font-bold">栈迁移完成</div>
+                <div class="text-gray-500 text-xs">RSP 指向新区域</div>
+              </div>
+            </div>
+            <div class="step-item flex items-center gap-3 p-2 rounded cursor-pointer hover:bg-gray-700/50 transition-all" onclick="goToStep(3)">
+              <div class="w-8 h-8 bg-cyan-900/50 rounded-full flex items-center justify-center text-cyan-400 font-bold">4</div>
+              <div class="flex-1">
+                <div class="text-gray-300 text-sm font-bold">执行新栈上 ROP</div>
+                <div class="text-gray-500 text-xs">pop rdi; ret; /bin/sh; system</div>
+              </div>
+            </div>
+          </div>
+          <div class="border-t border-gray-700 p-3 flex gap-2">
+            <button onclick="prevStep()" class="flex-1 bg-gray-700 hover:bg-gray-600 text-white py-2 px-3 rounded text-sm font-bold transition-all flex items-center justify-center gap-1">
+              <i data-lucide="chevron-left" class="w-4 h-4"></i> 上一步
+            </button>
+            <button onclick="nextStep()" class="flex-1 bg-cyan-600 hover:bg-cyan-500 text-white py-2 px-3 rounded text-sm font-bold transition-all flex items-center justify-center gap-1">
+              下一步 <i data-lucide="chevron-right" class="w-4 h-4"></i>
+            </button>
+          </div>
+        </div>
+
+        <!-- Pivot Gadget -->
+        <div class="bg-gray-800 rounded-lg border border-gray-700 p-4">
+          <h3 class="text-cyan-400 font-bold mb-2 flex items-center gap-2">
+            <i data-lucide="box" class="w-4 h-4"></i>
+            Stack Pivot Gadget
+          </h3>
+          <div class="bg-gray-900 rounded p-3 text-sm">
+            <div class="text-cyan-400 mb-1">leave = mov rsp, rbp; pop rbp</div>
+            <div class="text-gray-400 text-xs">如果 RBP 指向我们的可控区域，leave 就会把 RSP 迁移过去</div>
+          </div>
+        </div>
+
+        <!-- Explanation Card -->
+        <div class="bg-blue-900/20 border border-blue-800/50 rounded-lg p-4">
+          <h3 class="text-blue-400 font-bold mb-2 flex items-center gap-2">
+            <i data-lucide="book-open" class="w-4 h-4"></i>
+            栈迁移原理
+          </h3>
+          <p id="explanation-text" class="text-gray-300 text-sm leading-relaxed">
+            栈迁移利用 leave 指令的特性。当我们控制 RBP 的值时，执行 leave 会将 RSP 设置为我们控制的位置，从而实现栈的控制权转移。
+          </p>
+        </div>
+
+        <!-- Knowledge Card -->
+        <div class="bg-gray-800 rounded-lg border border-gray-700 p-4">
+          <h3 class="text-green-400 font-bold mb-2 flex items-center gap-2">
+            <i data-lucide="lightbulb" class="w-4 h-4"></i>
+            关键知识点
+          </h3>
+          <ul class="text-gray-300 text-sm space-y-2">
+            <li class="flex items-start gap-2">
+              <span class="text-cyan-400">1.</span>
+              <span><strong>leave</strong> = <strong>mov rsp, rbp; pop rbp</strong></span>
+            </li>
+            <li class="flex items-start gap-2">
+              <span class="text-cyan-400">2.</span>
+              <span>控制 RBP 就能控制 RSP 的最终值</span>
+            </li>
+            <li class="flex items-start gap-2">
+              <span class="text-cyan-400">3.</span>
+              <span>常见 pivot 目标: .bss 段、heap、stack 底部</span>
+            </li>
+            <li class="flex items-start gap-2">
+              <span class="text-red-400">!</span>
+              <span>新栈上需要布置好 ROP 链和返回地址</span>
+            </li>
+          </ul>
+        </div>
+
+      </div>
+
+      <!-- Right Panel: Visualization -->
+      <div class="lg:col-span-7 space-y-4">
+        
+        <!-- Memory Map -->
+        <div class="bg-gray-800 rounded-lg border border-gray-700 p-4 shadow-lg">
+          <h3 class="text-lg font-bold text-gray-300 mb-4 border-b border-gray-700 pb-2 text-center">
+            <i data-lucide="map" class="w-5 h-5 text-cyan-400 inline mr-2"></i>
+            内存布局
+          </h3>
+          <div class="space-y-2" id="memory-map">
+            <!-- Memory regions will be rendered here -->
+          </div>
+        </div>
+
+        <!-- Stack Comparison -->
+        <div class="grid grid-cols-2 gap-4">
+          <!-- Original Stack -->
+          <div class="bg-gray-800 rounded-lg border border-gray-700 p-4">
+            <h3 class="text-sm font-bold text-red-400 mb-3 text-center">
+              <i data-lucide="arrow-down" class="w-4 h-4 inline mr-1"></i>
+              原栈 (受限)
+            </h3>
+            <div class="space-y-1" id="original-stack"></div>
+          </div>
+          
+          <!-- New Stack -->
+          <div class="bg-gray-800 rounded-lg border border-gray-700 p-4">
+            <h3 class="text-sm font-bold text-green-400 mb-3 text-center">
+              <i data-lucide="arrow-up" class="w-4 h-4 inline mr-1"></i>
+              新栈 (.bss)
+            </h3>
+            <div class="space-y-1" id="new-stack"></div>
+          </div>
+        </div>
+
+        <!-- Execution Flow -->
+        <div class="bg-gray-800 rounded-lg border border-gray-700 overflow-hidden shadow-lg">
+          <div class="bg-gray-950 px-4 py-2 text-sm text-gray-400 font-semibold border-b border-gray-700 flex items-center gap-2">
+            <i data-lucide="code" class="w-4 h-4"></i> 执行流程
+          </div>
+          <div id="code-demo" class="p-4 text-sm font-mono bg-gray-950 space-y-1">
+            <div class="text-gray-500">// 点击"下一步"查看执行流程...</div>
+          </div>
+        </div>
+
+        <!-- Pivot Animation -->
+        <div id="pivot-animation" class="hidden bg-cyan-900/20 border border-cyan-700/50 rounded-lg p-6 text-center animate-fade-in">
+          <div class="text-4xl mb-4">⟲</div>
+          <h2 class="text-xl font-bold text-cyan-400 mb-2">栈迁移完成!</h2>
+          <p class="text-gray-300 text-sm">RSP 已从 <span class="text-red-400">0x7fffffffe3d8</span> 迁移到 <span class="text-green-400">0x00606000</span></p>
+        </div>
+
+      </div>
+
+    </div>
+  </div>
+
+  <script>
+    let currentStep = 0;
+    
+    const steps = [
+      {
+        title: '原栈溢出',
+        explanation: '在原始栈上发生溢出，但空间有限。我们需要跳转到 .bss 段布置更大的 ROP 链。',
+        originalStack: [
+          { addr: 0x7fffffffe420, val: '保存的 RBP', highlight: false },
+          { addr: 0x7fffffffe418, val: '返回地址 → pivot', highlight: true, flash: true },
+          { addr: 0x7fffffffe410, val: 'buf[溢出点]', highlight: true },
+        ],
+        newStack: [],
+        code: `// 原始栈布局
+buf:     0x7fffffffe410  [溢出覆盖...]
+saved_rbp: 0x7fffffffe420
+ret_addr: 0x400d26 (pivot gadget)
+
+// 溢出内容: ROP chain to pivot`,
+        pivotDone: false
+      },
+      {
+        title: '执行 Stack Pivot',
+        explanation: '返回地址指向 pivot gadget (leave; ret)。此时 RBP 指向 .bss 段上的可控区域。执行 leave = mov rsp, rbp 后，栈被迁移。',
+        originalStack: [
+          { addr: 0x7fffffffe420, val: '0x00606000 (.bss)', highlight: true, flash: true },
+          { addr: 0x7fffffffe418, val: 'pivot gadget', highlight: true },
+          { addr: 0x7fffffffe410, val: 'buf', highlight: true },
+        ],
+        newStack: [],
+        code: `// ROP chain in original stack
+0x7fffffffe410: pop rdi; ret
+0x7fffffffe418: leave; ret  ← pivot!
+
+// 执行 leave:
+//   mov rsp, rbp    ; RBP = 0x00606000
+//   pop rbp         ; 弹出新 ROP 链首地址
+//   ret             ; 跳转到下一个 gadget`,
+        pivotDone: false
+      },
+      {
+        title: '栈迁移完成',
+        explanation: '栈已经迁移到 .bss 段 (0x00606000)。现在可以在更大的空间上执行 ROP 链了。',
+        originalStack: [],
+        newStack: [
+          { addr: 0x00606000, val: 'pop rdi; ret', highlight: true },
+          { addr: 0x00606008, val: '"/bin/sh" addr', highlight: true },
+          { addr: 0x00606010, val: 'system() addr', highlight: true },
+          { addr: 0x00606018, val: 'exit() addr', highlight: false },
+        ],
+        code: `// .bss 段新栈布局
+0x00606000: pop rdi; ret      ← RIP
+0x00606008: 0x00405020        ← "/bin/sh"
+0x00606010: 0x00401060        ← system()
+0x00606018: 0x00401070        ← exit()
+
+// 现在执行完整的 ROP 链!`,
+        pivotDone: true
+      },
+      {
+        title: '执行新栈上的 ROP',
+        explanation: '在 .bss 段的新栈上成功执行 ROP 链，调用 system("/bin/sh") 获取 shell！',
+        originalStack: [],
+        newStack: [
+          { addr: 0x00606000, val: 'pop rdi; ret', highlight: false, executed: true },
+          { addr: 0x00606008, val: '"/bin/sh" addr', highlight: false, executed: true },
+          { addr: 0x00606010, val: 'system() addr', highlight: false, executed: true },
+          { addr: 0x00606018, val: 'exit() addr', highlight: false },
+        ],
+        code: `// 执行流程
+1. pop rdi        ; rdi = "/bin/sh"
+2. ret            ; 
+3. call system    ; system("/bin/sh")
+4. ret            ; 
+5. pop rdi        ; rdi = 0
+6. ret            ;
+7. call exit      ; 优雅退出
+
+// SHELL 获取成功!`,
+        pivotDone: true,
+        shell: true
+      }
+    ];
+
+    function hex(num) {
+      return '0x' + num.toString(16);
+    }
+
+    function renderMemoryMap() {
+      const container = document.getElementById('memory-map');
+      
+      const regions = [
+        { name: 'Stack (原)', start: 0x7fffffffe400, end: 0x7ffffffff000, color: 'red', current: true },
+        { name: 'Heap', start: 0x005555555000, end: 0x005555556000, color: 'yellow', current: false },
+        { name: '.bss (新栈)', start: 0x00606000, end: 0x00608000, color: 'green', current: true },
+        { name: ' libc', start: 0x7ffff7fc0000, end: 0x7ffff7fff000, color: 'purple', current: false }
+      ];
+
+      container.innerHTML = regions.map(reg => `
+        <div class="flex items-center gap-4">
+          <div class="w-24 text-xs text-right text-gray-500">${reg.name}</div>
+          <div class="flex-1 bg-gray-900 rounded h-6 relative overflow-hidden">
+            <div class="absolute inset-y-0 ${reg.color === 'red' ? 'bg-red-900/50' : reg.color === 'green' ? 'bg-green-900/50' : reg.color === 'yellow' ? 'bg-yellow-900/50' : 'bg-purple-900/50'} w-full opacity-30"></div>
+            <div class="absolute left-0 top-0 bottom-0 flex items-center px-2">
+              <span class="text-xs text-${reg.color}-400 font-mono">${hex(reg.start)}</span>
+            </div>
+            <div class="absolute right-0 top-0 bottom-0 flex items-center px-2">
+              <span class="text-xs text-${reg.color}-400 font-mono">${hex(reg.end)}</span>
+            </div>
+          </div>
+        </div>
+      `).join('');
+    }
+
+    function renderStack(containerId, stack, isOriginal = true) {
+      const container = document.getElementById(containerId);
+      
+      if (stack.length === 0) {
+        container.innerHTML = '<div class="text-gray-600 text-xs text-center py-4">空</div>';
+        return;
+      }
+
+      container.innerHTML = stack.map(item => {
+        let bgClass = 'bg-gray-900 border-gray-700';
+        let textClass = 'text-gray-400';
+        let extra = '';
+
+        if (item.highlight) {
+          bgClass = isOriginal ? 'bg-red-900/40 border-red-700' : 'bg-green-900/40 border-green-700';
+          textClass = isOriginal ? 'text-red-300' : 'text-green-300';
+        }
+        if (item.flash) {
+          extra = ' flash';
+        }
+        if (item.executed) {
+          bgClass = 'bg-gray-800 border-gray-600';
+          textClass = 'text-gray-600';
+        }
+
+        return `
+          <div class="flex items-center gap-2 ${extra}">
+            <div class="w-20 text-xs text-right text-gray-500 font-mono">${hex(item.addr)}</div>
+            <div class="flex-1 border ${bgClass} rounded p-1">
+              <span class="${textClass} text-xs">${item.val}</span>
+            </div>
+          </div>
+        `;
+      }).join('');
+    }
+
+    function renderCode() {
+      const container = document.getElementById('code-demo');
+      const step = steps[currentStep];
+      
+      if (!step) return;
+      
+      container.innerHTML = step.code.split('\n').map(line => {
+        let cls = 'text-gray-400';
+        if (line.includes('//')) {
+          cls = 'text-gray-500';
+        }
+        if (line.includes('pop') || line.includes('ret') || line.includes('call') || line.includes('leave')) {
+          cls = 'text-cyan-400';
+        }
+        if (line.includes('SHELL') || line.includes('成功')) {
+          cls = 'text-green-400';
+        }
+        return `<div class="${cls}">${line}</div>`;
+      }).join('');
+    }
+
+    function updateUI() {
+      const step = steps[currentStep];
+      
+      document.getElementById('explanation-text').innerText = step?.explanation || '';
+      
+      // Update step highlights
+      document.querySelectorAll('.step-item').forEach((el, idx) => {
+        if (idx === currentStep) {
+          el.classList.add('bg-cyan-900/30', 'border', 'border-cyan-700/50');
+        } else {
+          el.classList.remove('bg-cyan-900/30', 'border', 'border-cyan-700/50');
+        }
+      });
+      
+      // Show/hide pivot animation
+      const pivotAnim = document.getElementById('pivot-animation');
+      if (step?.pivotDone && currentStep >= 2) {
+        pivotAnim.classList.remove('hidden');
+      } else {
+        pivotAnim.classList.add('hidden');
+      }
+      
+      renderMemoryMap();
+      renderStack('original-stack', step?.originalStack || [], true);
+      renderStack('new-stack', step?.newStack || [], false);
+      renderCode();
+      lucide.createIcons();
+    }
+
+    function nextStep() {
+      if (currentStep < steps.length - 1) {
+        currentStep++;
+        updateUI();
+      }
+    }
+
+    function prevStep() {
+      if (currentStep > 0) {
+        currentStep--;
+        updateUI();
+      }
+    }
+
+    function goToStep(idx) {
+      currentStep = idx;
+      updateUI();
+    }
+
+    updateUI();
+  </script>
+</body>
+</html>

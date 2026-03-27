@@ -13,7 +13,13 @@
 | [函数调用约定](pages/asm-calling-convention.html) | x64 Linux/Windows 调用约定 |
 | [实战分析](pages/asm-practice.html) | C代码对照汇编分析 |
 
-### 1. Pwn 漏洞原理
+### 1. GDB 调试学习
+
+| 模块 | 内容 |
+|------|------|
+| [GDB教程](pages/gdb-learning.html) | 常用命令、速查表、实战调试 |
+
+### 2. Pwn 漏洞原理
 
 | 模块 | 难度 | 内容 |
 |------|------|------|
@@ -24,7 +30,7 @@
 | [Fastbin Attack](pages/fastbin-attack.html) | 高阶 | double-free、fd指针 |
 | [栈迁移](pages/stack-pivot.html) | 高阶 | leave指令、栈控制权 |
 
-### 2. CTF-Pwn 实战演练
+### 3. CTF-Pwn 实战演练
 
 | 模块 | 题目数 | 内容 |
 |------|--------|------|
@@ -60,6 +66,7 @@ pwn-learning/
 │   ├── asm-instructions.html# 指令详解
 │   ├── asm-calling-convention.html
 │   ├── asm-practice.html
+│   ├── gdb-learning.html  # GDB调试学习
 │   ├── stack-overflow.html
 │   ├── format-string.html
 │   ├── rop.html

@@ -1,0 +1,595 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>GDB调试学习</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <style>
+    code {
+      background: rgba(0,0,0,0.3);
+      padding: 2px 6px;
+      border-radius: 4px;
+    }
+    pre {
+      background: #1a1a1a;
+      padding: 1rem;
+      border-radius: 8px;
+      overflow-x: auto;
+    }
+    pre code {
+      background: none;
+      padding: 0;
+    }
+    .cmd-highlight {
+      background: linear-gradient(90deg, #3b82f6 0%, #8b5cf6 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+  </style>
+</head>
+<body class="min-h-screen bg-gray-900 text-gray-200 p-6 font-mono selection:bg-blue-500/30">
+  <div class="max-w-6xl mx-auto space-y-6">
+    
+    <!-- Header -->
+    <div class="border-b border-gray-700 pb-4">
+      <a href="index.html" class="text-blue-400 hover:text-blue-300 text-sm flex items-center gap-1 mb-2">
+        <i data-lucide="arrow-left" class="w-4 h-4"></i>
+        返回首页
+      </a>
+      <h1 class="text-2xl font-bold text-white flex items-center gap-2">
+        <i data-lucide="bug" class="w-6 h-6 text-green-400"></i>
+        GDB 调试学习
+      </h1>
+      <p class="text-gray-400 mt-2">
+        掌握GDB调试器常用命令，理解程序运行时的内部状态。
+      </p>
+    </div>
+
+    <!-- GDB Setup -->
+    <div class="bg-blue-900/20 border border-blue-800/50 rounded-lg p-4">
+      <h3 class="text-blue-400 font-bold mb-2 flex items-center gap-2">
+        <i data-lucide="rocket" class="w-4 h-4"></i>
+        环境准备
+      </h3>
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
+        <div>
+          <div class="text-yellow-400 font-bold mb-1">安装GDB</div>
+          <code class="text-green-300">apt install gdb</code>
+        </div>
+        <div>
+          <div class="text-yellow-400 font-bold mb-1">安装pwndbg插件（推荐）</div>
+          <code class="text-green-300">git clone https://github.com/pwndbg/pwndbg</code>
+          <div class="text-gray-500 text-xs mt-1">pwndbg 提供更好的堆、栈、寄存器可视化</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Basic Commands -->
+    <div class="bg-gray-800 rounded-lg border border-gray-700 p-6">
+      <h2 class="text-xl font-bold text-white mb-4 flex items-center gap-2">
+        <i data-lucide="terminal" class="w-5 h-5 text-green-400"></i>
+        基础命令
+      </h2>
+      
+      <div class="space-y-4">
+        
+        <!-- run -->
+        <div class="bg-gray-900 rounded border border-gray-700 p-4">
+          <div class="flex items-center gap-2 mb-2">
+            <span class="bg-green-600 text-white px-2 py-0.5 rounded text-xs font-bold">r / run</span>
+            <span class="text-gray-400 text-sm">启动程序调试</span>
+          </div>
+          <pre><code class="text-gray-300">(gdb) run
+# 或简写
+(gdb) r
+
+# 带参数运行
+(gdb) r arg1 arg2
+
+# 从文件读取输入
+(gdb) r < input.txt</code></pre>
+          <div class="mt-2 text-gray-400 text-sm">
+            <span class="text-yellow-400">效果：</span>启动程序，程序会执行直到断点或结束
+          </div>
+        </div>
+
+        <!-- break -->
+        <div class="bg-gray-900 rounded border border-gray-700 p-4">
+          <div class="flex items-center gap-2 mb-2">
+            <span class="bg-green-600 text-white px-2 py-0.5 rounded text-xs font-bold">b / break</span>
+            <span class="text-gray-400 text-sm">设置断点</span>
+          </div>
+          <pre><code class="text-gray-300">(gdb) break main                  # 在main函数入口打断点
+(gdb) break vuln                 # 在vuln函数打断点
+(gdb) break *0x401156            # 在指定地址打断点
+(gdb) break *0x401156            # 内存地址断点
+
+# 条件断点
+(gdb) break vuln if x==10       # 当x==10时中断
+(gdb) break 10 if i>100         # 第10行且i>100时中断
+
+# 查看断点
+(gdb) info breakpoints
+(gdb) delete 1                  # 删除1号断点</code></pre>
+          <div class="mt-2 text-gray-400 text-sm">
+            <span class="text-yellow-400">效果：</span>程序运行到断点处会暂停，等待调试命令
+          </div>
+        </div>
+
+        <!-- step -->
+        <div class="bg-gray-900 rounded border border-gray-700 p-4">
+          <div class="flex items-center gap-2 mb-2">
+            <span class="bg-green-600 text-white px-2 py-0.5 rounded text-xs font-bold">n / next</span>
+            <span class="bg-blue-600 text-white px-2 py-0.5 rounded text-xs font-bold">s / step</span>
+            <span class="text-gray-400 text-sm">单步执行</span>
+          </div>
+          <pre><code class="text-gray-300">(gdb) n / next    # 执行下一行（不进入函数）
+(gdb) s / step    # 执行下一行（会进入函数调用）
+(gdb) ni / nexti  # 单步汇编指令（不进入）
+(gdb) si / stepi  # 单步汇编指令（会进入）
+
+# 继续执行
+(gdb) c / continue  # 继续运行直到下一个断点
+(gdb) finish        # 执行到当前函数返回</code></pre>
+          <div class="mt-2 text-gray-400 text-sm">
+            <span class="text-yellow-400">next vs step：</span>next把函数调用当作一行，step会进入函数内部
+          </div>
+        </div>
+
+        <!-- print -->
+        <div class="bg-gray-900 rounded border border-gray-700 p-4">
+          <div class="flex items-center gap-2 mb-2">
+            <span class="bg-green-600 text-white px-2 py-0.5 rounded text-xs font-bold">p / print</span>
+            <span class="text-gray-400 text-sm">查看变量值</span>
+          </div>
+          <pre><code class="text-gray-300">(gdb) print x              # 查看变量x的值
+(gdb) print/x x            # 16进制显示
+(gdb) print/d x            # 十进制显示
+(gdb) print *ptr           # 解引用指针
+(gdb) print *0x601010      # 查看地址内容
+(gdb) print &var           # 查看变量地址
+(gdb) print array@len       # 查看数组（len为长度）
+
+# 打印寄存器
+(gdb) print $rax
+(gdb) print $rsp
+(gdb) print $rbp
+
+# 打印结构体
+(gdb) print *struct_ptr</code></pre>
+          <div class="mt-2 text-gray-400 text-sm">
+            <span class="text-yellow-400">格式化：</span><code>/x</code>十六进制 <code>/d</code>十进制 <code>/t</code>二进制 <code>/s</code>字符串
+          </div>
+        </div>
+
+        <!-- x -->
+        <div class="bg-gray-900 rounded border border-gray-700 p-4">
+          <div class="flex items-center gap-2 mb-2">
+            <span class="bg-green-600 text-white px-2 py-0.5 rounded text-xs font-bold">x</span>
+            <span class="text-gray-400 text-sm">查看内存</span>
+          </div>
+          <pre><code class="text-gray-300">(gdb) x/10x $rsp         # 从RSP显示10个32位十六进制值
+(gdb) x/20x $rsp         # 显示更多
+(gdb) x/s 0x601010       # 以字符串显示
+(gdb) x/20x 0x7fffffffe3e0  # 从指定地址显示
+
+# 格式说明: x/[数量][格式][单位] 地址
+# 格式: x=十六进制, d=十进制, s=字符串, i=指令
+# 单位: b=1字节, h=2字节, w=4字节, g=8字节
+
+(gdb) x/8gx $rsp         # 显示8个64位值(g=8字节)
+(gdb) x/16xb buf         # 显示buf处16个单字节
+(gdb) x/4i $rip          # 反汇编RIP处4条指令</code></pre>
+        </div>
+
+        <!-- disassemble -->
+        <div class="bg-gray-900 rounded border border-gray-700 p-4">
+          <div class="flex items-center gap-2 mb-2">
+            <span class="bg-green-600 text-white px-2 py-0.5 rounded text-xs font-bold">disas / disassemble</span>
+            <span class="text-gray-400 text-sm">反汇编代码</span>
+          </div>
+          <pre><code class="text-gray-300">(gdb) disassemble          # 反汇编当前函数
+(gdb) disassemble vuln     # 反汇编vuln函数
+(gdb) disassemble 0x401000, 0x401100  # 指定地址范围
+
+# 带源码模式（需要-g编译）
+(gdb) disas /s
+(gdb) disassemble /r 0x401000, 0x401100  # 显示原始字节</code></pre>
+        </div>
+
+      </div>
+    </div>
+
+    <!-- Stack Commands -->
+    <div class="bg-gray-800 rounded-lg border border-gray-700 p-6">
+      <h2 class="text-xl font-bold text-white mb-4 flex items-center gap-2">
+        <i data-lucide="layers" class="w-5 h-5 text-red-400"></i>
+        栈相关命令
+      </h2>
+      
+      <div class="space-y-4">
+        
+        <div class="bg-gray-900 rounded border border-gray-700 p-4">
+          <div class="flex items-center gap-2 mb-2">
+            <span class="bg-red-600 text-white px-2 py-0.5 rounded text-xs font-bold">bt / backtrace</span>
+            <span class="text-gray-400 text-sm">查看调用栈</span>
+          </div>
+          <pre><code class="text-gray-300">(gdb) bt                   # 查看完整调用栈
+(gdb) bt 10                # 只看前10层
+(gdb) frame 2             # 切换到第2层栈帧
+
+# 输出示例:
+# #0  vuln () at vuln.c:5
+# #1  0x0000000000401156 in main () at main.c:10
+# #2  0x00007ffff7a2d090 in __libc_start_main ()</code></pre>
+        </div>
+
+        <div class="bg-gray-900 rounded border border-gray-700 p-4">
+          <div class="flex items-center gap-2 mb-2">
+            <span class="bg-red-600 text-white px-2 py-0.5 rounded text-xs font-bold">info frame</span>
+            <span class="text-gray-400 text-sm">查看当前栈帧信息</span>
+          </div>
+          <pre><code class="text-gray-300">(gdb) info frame
+# 输出:
+Stack frame at 0x7fffffffe420:
+ rip = 0x401156; saved rip = 0x4011a0
+ called by frame at 0x7fffffffe430
+ source language c.
+ Arglist at 0x7fffffffe410, args: 
+ Locals at 0x7fffffffe410, Previous frame's sp is 0x7fffffffe420</code></pre>
+        </div>
+
+        <div class="bg-gray-900 rounded border border-gray-700 p-4">
+          <div class="flex items-center gap-2 mb-2">
+            <span class="bg-red-600 text-white px-2 py-0.5 rounded text-xs font-bold">info registers</span>
+            <span class="text-gray-400 text-sm">查看寄存器</span>
+          </div>
+          <pre><code class="text-gray-300">(gdb) info registers        # 显示所有寄存器
+(gdb) info registers rax    # 只显示RAX
+(gdb) info registers rsp rbp # 显示指定寄存器
+
+# 输出:
+rax            0x0     0
+rbx            0x0     0
+rcx            0x0     0
+rdx            0x7ffff7fe180   140737488346496
+rsi            0x7ffff7fe170   140737488346480
+rdi            0x1     1
+rbp            0x7fffffffe420   140737488350240
+rsp            0x7fffffffe3f8   140737488350200
+rip            0x401156   0x401156</code></pre>
+        </div>
+
+      </div>
+    </div>
+
+    <!-- Memory & Binary -->
+    <div class="bg-gray-800 rounded-lg border border-gray-700 p-6">
+      <h2 class="text-xl font-bold text-white mb-4 flex items-center gap-2">
+        <i data-lucide="database" class="w-5 h-5 text-purple-400"></i>
+        内存与ELF命令
+      </h2>
+      
+      <div class="space-y-4">
+        
+        <div class="bg-gray-900 rounded border border-gray-700 p-4">
+          <div class="flex items-center gap-2 mb-2">
+            <span class="bg-purple-600 text-white px-2 py-0.5 rounded text-xs font-bold">info</span>
+            <span class="text-gray-400 text-sm">查看ELF信息</span>
+          </div>
+          <pre><code class="text-gray-300">(gdb) info functions        # 列出所有函数
+(gdb) info functions vuln   # 查找vuln函数
+(gdb) info variables        # 列出所有全局变量
+(gdb) info sharedlibrary   # 查看加载的共享库
+
+(gdb) info breakpoints     # 查看所有断点
+(gdb) info watchpoints     # 查看监视点
+
+(gdb) info proc mappings   # 查看进程内存映射
+(gdb) info threads         # 查看线程</code></pre>
+        </div>
+
+        <div class="bg-gray-900 rounded border border-gray-700 p-4">
+          <div class="flex items-center gap-2 mb-2">
+            <span class="bg-purple-600 text-white px-2 py-0.5 rounded text-xs font-bold">got / plt</span>
+            <span class="text-gray-400 text-sm">查看GOT/PLT表</span>
+          </div>
+          <pre><code class="text-gray-300">(gdb) got                   # 查看GOT表
+(gdb) plt                  # 查看PLT表
+
+# 常用:
+(gdb) x/10x got            # 查看GOT表内容
+(gdb) x/10x plt            # 查看PLT表内容
+
+# 找特定函数地址:
+(gdb) got system           # system函数的GOT地址</code></pre>
+        </div>
+
+        <div class="bg-gray-900 rounded border border-gray-700 p-4">
+          <div class="flex items-center gap-2 mb-2">
+            <span class="bg-purple-600 text-white px-2 py-0.5 rounded text-xs font-bold">search</span>
+            <span class="text-gray-400 text-sm">搜索内存</span>
+          </div>
+          <pre><code class="text-gray-300">(gdb) search-pattern /bin/sh  # 搜索字符串
+(gdb) find /bin/sh           # 搜索字节序列
+(gdb) find $rsp, $rsp+100, 0x41  # 在栈上搜索0x41</code></pre>
+        </div>
+
+      </div>
+    </div>
+
+    <!-- Pwndbg Commands -->
+    <div class="bg-gray-800 rounded-lg border border-gray-700 p-6">
+      <h2 class="text-xl font-bold text-white mb-4 flex items-center gap-2">
+        <i data-lucide="cpu" class="w-5 h-5 text-yellow-400"></i>
+        Pwndbg 特有命令
+      </h2>
+      <div class="bg-yellow-900/20 border border-yellow-800/50 rounded p-3 text-sm mb-4">
+        <span class="text-yellow-400 font-bold">注意：</span>安装pwndbg后可用这些增强命令
+        <code class="ml-2">git clone https://github.com/pwndbg/pwndbg && cd pwndbg && ./setup.sh</code>
+      </div>
+      
+      <div class="space-y-4">
+        
+        <div class="bg-gray-900 rounded border border-gray-700 p-4">
+          <div class="flex items-center gap-2 mb-2">
+            <span class="bg-yellow-600 text-white px-2 py-0.5 rounded text-xs font-bold">heap</span>
+            <span class="text-gray-400 text-sm">查看堆状态</span>
+          </div>
+          <pre><code class="text-gray-300">(gdb) heap                   # 显示堆概览
+(gdb) heapbins              # 显示所有bins状态
+(gdb) fastbins               # 显示fastbins
+(gdb) smallbins             # 显示smallbins
+(gdb) unsortedbin           # 显示unsorted bin
+(gdb) chunks                # 显示所有chunk详情</code></pre>
+          <div class="mt-2 text-gray-400 text-sm">
+            <span class="text-yellow-400">效果：</span>可视化显示堆的bins链表结构
+          </div>
+        </div>
+
+        <div class="bg-gray-900 rounded border border-gray-700 p-4">
+          <div class="flex items-center gap-2 mb-2">
+            <span class="bg-yellow-600 text-white px-2 py-0.5 rounded text-xs font-bold">stack</span>
+            <span class="text-gray-400 text-sm">查看栈内容</span>
+          </div>
+          <pre><code class="text-gray-300">(gdb) stack               # 显示栈内容（带注释）
+(gdb) stack 30             # 显示30行栈
+(gdb) stack -10           # 显示更多（向上）
+(gdb) canary              # 查看栈canary值</code></pre>
+        </div>
+
+        <div class="bg-gray-900 rounded border border-gray-700 p-4">
+          <div class="flex items-center gap-2 mb-2">
+            <span class="bg-yellow-600 text-white px-2 py-0.5 rounded text-xs font-bold">vmmap</span>
+            <span class="text-gray-400 text-sm">查看内存映射</span>
+          </div>
+          <pre><code class="text-gray-300">(gdb) vmmap                # 显示内存映射
+# 输出:
+# 0x00400000 0x00401000 r-xp /path/to/binary
+# 0x00600000 0x00601000 rw-p /path/to/binary
+# 0x7ffff7fc0000 0x7ffff7ffe000 r-xp [heap]
+# ...</code></pre>
+        </div>
+
+        <div class="bg-gray-900 rounded border border-gray-700 p-4">
+          <div class="flex items-center gap-2 mb-2">
+            <span class="bg-yellow-600 text-white px-2 py-0.5 rounded text-xs font-bold">telescope</span>
+            <span class="text-gray-400 text-sm">递归查看内存</span>
+          </div>
+          <pre><code class="text-gray-300">(gdb) telescope            # 查看地址内容并跟随指针
+(gdb) telescope 20        # 查看20层
+(gdb) telescope $rsp       # 从RSP开始查看</code></pre>
+        </div>
+
+        <div class="bg-gray-900 rounded border border-gray-700 p-4">
+          <div class="flex items-center gap-2 mb-2">
+            <span class="bg-yellow-600 text-white px-2 py-0.5 rounded text-xs font-bold">checksec</span>
+            <span class="text-gray-400 text-sm">检查二进制保护</span>
+          </div>
+          <pre><code class="text-gray-300">(gdb) checksec
+# 输出:
+# [*] '/path/to/binary'
+#     Arch:     amd64-64-little
+#     RELRO:    Partial RELRO
+#     Stack:    Canary found
+#     NX:       NX enabled
+#     PIE:      No PIE (0x400000)</code></pre>
+        </div>
+
+        <div class="bg-gray-900 rounded border border-gray-700 p-4">
+          <div class="flex items-center gap-2 mb-2">
+            <span class="bg-yellow-600 text-white px-2 py-0.5 rounded text-xs font-bold">ropsearch / search</span>
+            <span class="text-gray-400 text-sm">搜索ROP gadgets</span>
+          </div>
+          <pre><code class="text-gray-300">(gdb) search pop rdi       # 搜索 "pop rdi"
+(gdb) search pop rdx       # 搜索 "pop rdx"
+(gdb) search "pop rdi; ret"  # 搜索完整gadget</code></pre>
+        </div>
+
+        <div class="bg-gray-900 rounded border border-gray-700 p-4">
+          <div class="flex items-center gap-2 mb-2">
+            <span class="bg-yellow-600 text-white px-2 py-0.5 rounded text-xs font-bold">got</span>
+            <span class="text-gray-400 text-sm">查看GOT表（可视化）</span>
+          </div>
+          <pre><code class="text-gray-300">(gdb) got                 # 以表格形式显示GOT表
+(gdb) got system          # 查找system的GOT条目</code></pre>
+        </div>
+
+      </div>
+    </div>
+
+    <!-- Watchpoints -->
+    <div class="bg-gray-800 rounded-lg border border-gray-700 p-6">
+      <h2 class="text-xl font-bold text-white mb-4 flex items-center gap-2">
+        <i data-lucide="eye" class="w-5 h-5 text-cyan-400"></i>
+        监视点 (Watchpoints)
+      </h2>
+      
+      <div class="space-y-4">
+        
+        <div class="bg-gray-900 rounded border border-gray-700 p-4">
+          <div class="flex items-center gap-2 mb-2">
+            <span class="bg-cyan-600 text-white px-2 py-0.5 rounded text-xs font-bold">watch</span>
+            <span class="text-gray-400 text-sm">设置写监视点</span>
+          </div>
+          <pre><code class="text-gray-300">(gdb) watch x              # 当x被写入时暂停
+(gdb) watch *0x601010      # 当地址被写入时暂停
+
+# 设置读/写监视点
+(gdb) awatch *0x601010     # 读或写时暂停
+(gdb) rwatch *0x601010    # 读取时暂停
+
+# 查看监视点
+(gdb) info watchpoints</code></pre>
+          <div class="mt-2 text-gray-400 text-sm">
+            <span class="text-yellow-400">注意：</span>硬件支持的监视点，数量有限
+          </div>
+        </div>
+
+      </div>
+    </div>
+
+    <!-- Practical Examples -->
+    <div class="bg-gray-800 rounded-lg border border-gray-700 p-6">
+      <h2 class="text-xl font-bold text-white mb-4 flex items-center gap-2">
+        <i data-lucide="file-code" class="w-5 h-5 text-orange-400"></i>
+        实战调试示例
+      </h2>
+
+      <div class="bg-gray-900 rounded border border-gray-700 p-4 mb-4">
+        <div class="text-orange-400 font-bold mb-2">调试栈溢出</div>
+        <pre><code class="text-gray-300">(gdb) break gets              # 在gets函数入口打断点
+(gdb) run                      # 运行程序
+
+# 程序断在gets处
+(gdb) x/10x $rsp               # 查看栈上内容
+(gdb) print buf                 # 查看buf地址
+
+# 单步执行
+(gdb) ni                        # 执行gets
+# 输入大量字符触发溢出
+
+(gdb) x/20x $rsp               # 再次查看栈，观察溢出
+
+# 查看返回地址
+(gdb) print $rbp+8             # Saved RBP 上是返回地址
+(gdb) x/x $rbp+8              # 查看返回地址内容</code></pre>
+      </div>
+
+      <div class="bg-gray-900 rounded border border-gray-700 p-4 mb-4">
+        <div class="text-orange-400 font-bold mb-2">调试格式化字符串</div>
+        <pre><code class="text-gray-300">(gdb) break printf
+(gdb) run
+
+# 程序断在printf处
+(gdb) x/10x $rsp               # 查看栈参数
+# 发现用户输入被当作格式字符串处理
+
+(gdb) c                         # 继续
+# 输入 %x.%x.%x 观察泄露
+
+(gdb) x/s 0x601020             # 查看泄露的地址内容</code></pre>
+      </div>
+
+      <div class="bg-gray-900 rounded border border-gray-700 p-4 mb-4">
+        <div class="text-orange-400 font-bold mb-2">调试堆溢出</div>
+        <pre><code class="text-gray-300">(gdb) break malloc
+(gdb) break free
+(gdb) run
+
+# malloc执行时
+(gdb) heap                      # 查看堆状态
+(gdb) x/10gx 0x602000          # 查看chunk内容
+
+# free执行后
+(gdb) fastbins                  # 查看fastbin链表
+(gdb) x/10gx 0x602000          # 观察chunk被放入bins</code></pre>
+      </div>
+
+      <div class="bg-gray-900 rounded border border-gray-700 p-4">
+        <div class="text-orange-400 font-bold mb-2">完整调试流程</div>
+        <pre><code class="text-gray-300"># 1. 启动调试
+(gdb) file ./challenge          # 加载二进制
+(gdb) checksec                  # 检查保护
+
+# 2. 设置断点
+(gdb) break main
+(gdb) break vuln
+(gdb) break *0x401156
+
+# 3. 运行
+(gdb) run < input.txt           # 带输入运行
+
+# 4. 调试过程中
+(gdb) backtrace                 # 查看调用栈
+(gdb) info registers            # 查看寄存器
+(gdb) x/20x $rsp               # 查看栈
+(gdb) print variable           # 查看变量
+
+# 5. 单步执行
+(gdb) ni                        # 单步汇编
+(gdb) si                        # 单步汇编（进入调用）
+(gdb) finish                    # 执行到函数返回
+
+# 6. 修改执行
+(gdb) set $rax = 0x1234        # 修改寄存器
+(gdb) set {int}0x601010 = 0    # 修改内存
+(gdb) jump *0x401156            # 跳转到地址
+
+# 7. 继续/退出
+(gdb) continue                  # 继续运行
+(gdb) detach                   # 分离调试
+(gdb) quit                     # 退出gdb</code></pre>
+      </div>
+
+    </div>
+
+    <!-- Quick Reference -->
+    <div class="bg-gray-800 rounded-lg border border-gray-700 p-6">
+      <h2 class="text-xl font-bold text-white mb-4 flex items-center gap-2">
+        <i data-lucide="book" class="w-5 h-5 text-gray-400"></i>
+        常用命令速查表
+      </h2>
+      
+      <div class="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+        <div class="space-y-2">
+          <div class="text-yellow-400 font-bold">运行控制</div>
+          <div><code class="text-green-300">r/run</code> - 运行</div>
+          <div><code class="text-green-300">c/cont</code> - 继续</div>
+          <div><code class="text-green-300">k/kill</code> - 终止</div>
+          <div><code class="text-green-300">q/quit</code> - 退出</div>
+        </div>
+        <div class="space-y-2">
+          <div class="text-yellow-400 font-bold">断点</div>
+          <div><code class="text-green-300">b addr</code> - 断点</div>
+          <div><code class="text-green-300">delete n</code> - 删除</div>
+          <div><code class="text-green-300">disable n</code> - 禁用</div>
+          <div><code class="text-green-300">enable n</code> - 启用</div>
+        </div>
+        <div class="space-y-2">
+          <div class="text-yellow-400 font-bold">单步</div>
+          <div><code class="text-green-300">n/next</code> - 下行</div>
+          <div><code class="text-green-300">s/step</code> - 进入</div>
+          <div><code class="text-green-300">ni/ni</code> - 汇编</div>
+          <div><code class="text-green-300">finish</code> - 返回</div>
+        </div>
+        <div class="space-y-2">
+          <div class="text-yellow-400 font-bold">查看</div>
+          <div><code class="text-green-300">p x</code> - 变量</div>
+          <div><code class="text-green-300">x/10x</code> - 内存</div>
+          <div><code class="text-green-300">bt</code> - 栈</div>
+          <div><code class="text-green-300">disas</code> - 汇编</div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <script>
+    lucide.createIcons();
+  </script>
+</body>
+</html>

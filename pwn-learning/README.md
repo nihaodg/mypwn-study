@@ -18,6 +18,7 @@
 | 模块 | 内容 |
 |------|------|
 | [GDB教程](pages/gdb-learning.html) | 常用命令、速查表、实战调试 |
+| [Pwn函数](pages/pwn-functions.html) | Pwntools函数详解、使用场景、输出示例 |
 
 ### 2. Pwn 漏洞原理
 
@@ -67,6 +68,7 @@ pwn-learning/
 │   ├── asm-calling-convention.html
 │   ├── asm-practice.html
 │   ├── gdb-learning.html  # GDB调试学习
+│   ├── pwn-functions.html  # Pwn脚本函数
 │   ├── stack-overflow.html
 │   ├── format-string.html
 │   ├── rop.html

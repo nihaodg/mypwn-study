@@ -1,0 +1,429 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>格式化字符串漏洞可视化</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <style>
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(-10px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+    .animate-fade-in {
+      animation: fadeIn 0.3s ease-out forwards;
+    }
+    @keyframes pulse-glow {
+      0%, 100% { box-shadow: 0 0 5px rgba(239, 68, 68, 0.5); }
+      50% { box-shadow: 0 0 20px rgba(239, 68, 68, 0.8); }
+    }
+    .pulse-glow {
+      animation: pulse-glow 1s ease-in-out infinite;
+    }
+  </style>
+</head>
+<body class="min-h-screen bg-gray-900 text-gray-200 p-6 font-mono selection:bg-yellow-500/30">
+  <div class="max-w-6xl mx-auto space-y-6">
+    
+    <!-- Header -->
+    <div class="border-b border-gray-700 pb-4">
+      <div class="flex items-center justify-between">
+        <div>
+          <a href="../index.html" class="text-blue-400 hover:text-blue-300 text-sm flex items-center gap-1 mb-2">
+            <i data-lucide="arrow-left" class="w-4 h-4"></i>
+            返回首页
+          </a>
+          <h1 class="text-2xl font-bold text-white flex items-center gap-2">
+            <i data-lucide="type" class="w-6 h-6 text-yellow-400"></i>
+            格式化字符串漏洞可视化
+          </h1>
+          <p class="text-gray-400 mt-2">
+            探索 printf 系列函数中格式说明符的威力，学习如何泄露内存和写入任意数据。
+          </p>
+        </div>
+        <div class="flex gap-2">
+          <span class="px-3 py-1 bg-yellow-900/30 text-yellow-400 rounded-full text-sm border border-yellow-800">入门</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="grid grid-cols-1 lg:grid-cols-12 gap-6">
+      
+      <!-- Left Panel -->
+      <div class="lg:col-span-5 space-y-4">
+        
+        <!-- Code Viewer -->
+        <div class="bg-gray-800 rounded-lg border border-gray-700 overflow-hidden shadow-lg">
+          <div class="bg-gray-950 px-4 py-2 text-sm text-gray-400 font-semibold border-b border-gray-700 flex items-center gap-2">
+            <i data-lucide="code" class="w-4 h-4"></i> Vulnerable Code
+          </div>
+          <div class="p-4 space-y-3 text-sm">
+            <div class="text-gray-400">// 漏洞代码示例</div>
+            <div class="text-yellow-400">char buf[64];</div>
+            <div class="text-yellow-400">read(0, buf, 64);</div>
+            <div class="text-red-400">printf(buf);</div>
+            <div class="text-gray-500 mt-4 text-xs">// 正确写法: printf("%s", buf);</div>
+          </div>
+        </div>
+
+        <!-- Format Specifier Buttons -->
+        <div class="bg-gray-800 rounded-lg border border-gray-700 p-4">
+          <h3 class="text-yellow-400 font-bold mb-3 flex items-center gap-2">
+            <i data-lucide="sparkles" class="w-4 h-4"></i>
+            选择格式说明符
+          </h3>
+          <div class="grid grid-cols-4 gap-2">
+            <button onclick="selectFormat('%s')" class="format-btn bg-gray-700 hover:bg-gray-600 text-gray-300 py-2 px-3 rounded text-sm transition-all" data-format="%s">%s</button>
+            <button onclick="selectFormat('%x')" class="format-btn bg-gray-700 hover:bg-gray-600 text-gray-300 py-2 px-3 rounded text-sm transition-all" data-format="%x">%x</button>
+            <button onclick="selectFormat('%p')" class="format-btn bg-gray-700 hover:bg-gray-600 text-gray-300 py-2 px-3 rounded text-sm transition-all" data-format="%p">%p</button>
+            <button onclick="selectFormat('%d')" class="format-btn bg-gray-700 hover:bg-gray-600 text-gray-300 py-2 px-3 rounded text-sm transition-all" data-format="%d">%d</button>
+            <button onclick="selectFormat('%c')" class="format-btn bg-gray-700 hover:bg-gray-600 text-gray-300 py-2 px-3 rounded text-sm transition-all" data-format="%c">%c</button>
+            <button onclick="selectFormat('%n')" class="format-btn bg-red-900/50 hover:bg-red-800/50 text-red-300 py-2 px-3 rounded text-sm transition-all" data-format="%n">%n</button>
+            <button onclick="selectFormat('%08x')" class="format-btn bg-gray-700 hover:bg-gray-600 text-gray-300 py-2 px-3 rounded text-sm transition-all" data-format="%08x">%08x</button>
+            <button onclick="selectFormat('%lx')" class="format-btn bg-gray-700 hover:bg-gray-600 text-gray-300 py-2 px-3 rounded text-sm transition-all" data-format="%lx">%lx</button>
+          </div>
+          <div class="mt-3 text-sm text-gray-400">
+            当前输入: <span id="current-format" class="text-yellow-400 font-bold">%s</span>
+          </div>
+        </div>
+
+        <!-- Position Input -->
+        <div class="bg-gray-800 rounded-lg border border-gray-700 p-4">
+          <h3 class="text-yellow-400 font-bold mb-3 flex items-center gap-2">
+            <i data-lucide="hash" class="w-4 h-4"></i>
+            参数位置控制
+          </h3>
+          <div class="flex items-center gap-3">
+            <button onclick="changePos(-1)" class="bg-gray-700 hover:bg-gray-600 text-white w-10 h-10 rounded-lg font-bold flex items-center justify-center">-</button>
+            <div class="flex-1 text-center">
+              <div class="text-xs text-gray-500 mb-1">格式串中第 N 个参数</div>
+              <div id="pos-display" class="text-3xl text-yellow-400 font-bold">1$</div>
+            </div>
+            <button onclick="changePos(1)" class="bg-gray-700 hover:bg-gray-600 text-white w-10 h-10 rounded-lg font-bold flex items-center justify-center">+</button>
+          </div>
+          <div class="mt-3 text-xs text-gray-500">
+            示例: <span class="text-green-400">%2$x</span> = 打印第2个参数 (以16进制)
+          </div>
+        </div>
+
+        <!-- Execute Button -->
+        <div class="flex gap-4">
+          <button onclick="executePrintf()" class="flex-1 bg-yellow-600 hover:bg-yellow-500 text-white py-3 px-4 rounded-lg font-bold flex justify-center items-center gap-2 transition-all shadow-lg active:scale-95">
+            <i data-lucide="play" class="w-5 h-5"></i> 执行 printf
+          </button>
+          <button onclick="resetFormat()" class="bg-gray-700 hover:bg-gray-600 text-white py-3 px-4 rounded-lg font-bold flex justify-center items-center gap-2 transition-all shadow-lg active:scale-95">
+            <i data-lucide="rotate-ccw" class="w-5 h-5"></i> 重置
+          </button>
+        </div>
+
+        <!-- Output -->
+        <div class="bg-gray-800 rounded-lg border border-gray-700 overflow-hidden shadow-lg">
+          <div class="bg-gray-950 px-4 py-2 text-sm text-gray-400 font-semibold border-b border-gray-700 flex items-center gap-2">
+            <i data-lucide="terminal" class="w-4 h-4"></i> 输出结果
+          </div>
+          <div id="printf-output" class="p-4 min-h-[100px] text-green-400 font-mono text-sm whitespace-pre-wrap break-all bg-gray-950">
+            点击"执行 printf"查看输出...
+          </div>
+        </div>
+
+        <!-- Explanation Card -->
+        <div class="bg-blue-900/20 border border-blue-800/50 rounded-lg p-4">
+          <h3 class="text-blue-400 font-bold mb-2 flex items-center gap-2">
+            <i data-lucide="book-open" class="w-4 h-4"></i>
+            原理解析
+          </h3>
+          <p id="explanation-text" class="text-gray-300 text-sm leading-relaxed">
+            格式化字符串函数会从栈上读取参数。当输入包含 %x 时，printf 会把栈上的下一个值当作整数输出。
+          </p>
+        </div>
+
+        <!-- Knowledge Card -->
+        <div class="bg-gray-800 rounded-lg border border-gray-700 p-4">
+          <h3 class="text-green-400 font-bold mb-2 flex items-center gap-2">
+            <i data-lucide="lightbulb" class="w-4 h-4"></i>
+            关键知识点
+          </h3>
+          <ul class="text-gray-300 text-sm space-y-2">
+            <li class="flex items-start gap-2">
+              <span class="text-yellow-400">%x</span>
+              <span>读取栈上4字节，以16进制输出</span>
+            </li>
+            <li class="flex items-start gap-2">
+              <span class="text-yellow-400">%s</span>
+              <span>读取指针指向的字符串</span>
+            </li>
+            <li class="flex items-start gap-2">
+              <span class="text-yellow-400">%n</span>
+              <span>将已输出字符数写入指定地址</span>
+            </li>
+            <li class="flex items-start gap-2">
+              <span class="text-yellow-400">%N$x</span>
+              <span>直接读取第N个参数</span>
+            </li>
+          </ul>
+        </div>
+
+      </div>
+
+      <!-- Right Panel: Stack Visualization -->
+      <div class="lg:col-span-7 bg-gray-800 rounded-lg border border-gray-700 p-4 shadow-lg flex flex-col">
+        <h2 class="text-lg font-bold text-gray-300 mb-4 border-b border-gray-700 pb-2 text-center">
+          Stack Memory & Registers
+        </h2>
+        
+        <div class="flex-1 flex flex-col justify-center space-y-4">
+          
+          <!-- Format String Input -->
+          <div class="bg-gray-900 rounded-lg border border-yellow-700/50 p-3">
+            <div class="text-xs text-yellow-500 mb-2 font-bold">用户输入 (格式化字符串)</div>
+            <div id="format-input" class="text-yellow-400 font-mono text-lg tracking-wider">
+              %s
+            </div>
+          </div>
+
+          <!-- Stack Diagram -->
+          <div class="space-y-2" id="memory-list"></div>
+
+          <!-- Leaked Values -->
+          <div id="leaked-container" class="hidden bg-green-900/20 border border-green-700/50 rounded-lg p-4 animate-fade-in">
+            <h4 class="text-green-400 font-bold mb-2 flex items-center gap-2">
+              <i data-lucide="eye" class="w-4 h-4"></i>
+              泄露的数据
+            </h4>
+            <div id="leaked-values" class="text-green-300 font-mono text-sm space-y-1"></div>
+          </div>
+
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <script>
+    let currentFormat = '%s';
+    let posIndex = 1;
+    let leakedValues = [];
+    let memoryData = {};
+    
+    const INITIAL_RSP = 0x7fffffffe3a0;
+    
+    const formatDescriptions = {
+      '%s': '将指针当作字符串指针，打印直到 \\0 的内容',
+      '%x': '读取4字节栈上数据，以16进制输出',
+      '%p': '读取8字节栈上数据，以16进制输出（64位）',
+      '%d': '读取4字节栈上数据，以十进制输出',
+      '%c': '读取1字节栈上数据，以字符输出',
+      '%n': '危险！将已输出字符数写入指定地址',
+      '%08x': '读取4字节，8位16进制（补零）',
+      '%lx': '读取8字节，16进制'
+    };
+
+    function initMemory() {
+      memoryData = {
+        [INITIAL_RSP - 0]: '0x7fffffffe4a0',     // argc
+        [INITIAL_RSP + 8]: '0x0000000000000001',  // argv[0]
+        [INITIAL_RSP + 16]: '0x00007fffffffe4c8', // argv[1]
+        [INITIAL_RSP + 24]: '0x0000000000000000', // argv[2]
+        [INITIAL_RSP + 32]: '0x4141414141414141', // env[0] = "AAAA"
+        [INITIAL_RSP + 40]: '0x4242424242424242', // env[1] = "BBBB"
+        [INITIAL_RSP + 48]: '0x0000000000401100', // saved return addr
+        [INITIAL_RSP + 56]: '0x00007fffffffe420', // saved rbp
+        [INITIAL_RSP + 64]: '0x2020202020202020', // buf 起始 (空格填充)
+        [INITIAL_RSP + 72]: '0x2020202020202020', // buf + 8
+        [INITIAL_RSP + 80]: '0x2020202020202020', // buf + 16
+        [INITIAL_RSP + 88]: '0x2020202020202020', // buf + 24
+      };
+    }
+
+    function renderMemory() {
+      const container = document.getElementById('memory-list');
+      const layout = [
+        { addr: INITIAL_RSP + 88, label: 'buf[24:31]', type: 'buf' },
+        { addr: INITIAL_RSP + 80, label: 'buf[16:23]', type: 'buf' },
+        { addr: INITIAL_RSP + 72, label: 'buf[8:15]', type: 'buf' },
+        { addr: INITIAL_RSP + 64, label: 'buf[0:7]', type: 'buf' },
+        { addr: INITIAL_RSP + 56, label: 'Saved RBP', type: 'rbp' },
+        { addr: INITIAL_RSP + 48, label: 'Return Addr', type: 'ret' },
+        { addr: INITIAL_RSP + 40, label: 'env[1]', type: 'env' },
+        { addr: INITIAL_RSP + 32, label: 'env[0]', type: 'env' },
+        { addr: INITIAL_RSP + 24, label: 'argv[2]', type: 'argv' },
+        { addr: INITIAL_RSP + 16, label: 'argv[1]', type: 'argv' },
+        { addr: INITIAL_RSP + 8, label: 'argv[0]', type: 'argv' },
+        { addr: INITIAL_RSP + 0, label: 'argc', type: 'special' }
+      ];
+
+      container.innerHTML = layout.map((slot, idx) => {
+        const value = memoryData[slot.addr] || '0x0000000000000000';
+        const isHighlighted = leakedValues.includes(slot.addr);
+        
+        let bgClass = 'bg-gray-900';
+        let borderClass = 'border-gray-700';
+        let textClass = 'text-gray-400';
+
+        if (slot.type === 'buf') {
+          bgClass = 'bg-green-950/40';
+          borderClass = 'border-green-900';
+          textClass = 'text-green-300';
+        } else if (slot.type === 'rbp') {
+          bgClass = 'bg-blue-950/40';
+          borderClass = 'border-blue-900';
+          textClass = 'text-blue-300';
+        } else if (slot.type === 'ret') {
+          bgClass = 'bg-purple-950/40';
+          borderClass = 'border-purple-900';
+          textClass = 'text-purple-300';
+        } else if (slot.type === 'env') {
+          bgClass = 'bg-yellow-950/40';
+          borderClass = 'border-yellow-900';
+          textClass = 'text-yellow-300';
+        }
+
+        if (isHighlighted) {
+          bgClass = 'bg-red-900/60';
+          borderClass = 'border-red-500 pulse-glow';
+          textClass = 'text-white font-bold';
+        }
+
+        return `
+          <div class="flex items-center gap-4 relative group">
+            <div class="w-32 text-right text-xs text-gray-500 font-mono">
+              ${'0x' + slot.addr.toString(16)}
+            </div>
+            <div class="flex-1 border ${borderClass} ${bgClass} rounded-md p-2 flex justify-between items-center transition-all">
+              <div class="text-center font-mono ${textClass} tracking-widest px-2">
+                ${value}
+              </div>
+              <div class="text-xs text-gray-500 w-28">${slot.label}</div>
+            </div>
+          </div>
+        `;
+      }).join('');
+    }
+
+    function selectFormat(fmt) {
+      currentFormat = fmt;
+      document.getElementById('current-format').innerText = fmt;
+      document.getElementById('format-input').innerText = fmt;
+      document.getElementById('explanation-text').innerText = formatDescriptions[fmt] || '未知格式说明符';
+      
+      document.querySelectorAll('.format-btn').forEach(btn => {
+        btn.classList.remove('ring-2', 'ring-yellow-400');
+        if (btn.dataset.format === fmt) {
+          btn.classList.add('ring-2', 'ring-yellow-400');
+        }
+      });
+    }
+
+    function changePos(delta) {
+      posIndex = Math.max(1, Math.min(10, posIndex + delta));
+      document.getElementById('pos-display').innerText = posIndex + '$';
+    }
+
+    function executePrintf() {
+      leakedValues = [];
+      
+      const outputEl = document.getElementById('printf-output');
+      let output = '';
+      
+      // Simulate what printf does with different format specifiers
+      const stackAddrs = [
+        INITIAL_RSP + 0,   // argc
+        INITIAL_RSP + 8,   // argv[0]
+        INITIAL_RSP + 16,  // argv[1]
+        INITIAL_RSP + 24,  // argv[2]
+        INITIAL_RSP + 32,  // env[0]
+        INITIAL_RSP + 40,  // env[1]
+        INITIAL_RSP + 48,  // return addr
+        INITIAL_RSP + 56,  // saved rbp
+        INITIAL_RSP + 64,  // buf[0]
+        INITIAL_RSP + 72,  // buf[8]
+      ];
+
+      if (currentFormat === '%s') {
+        output = '[LEAK] 读取到字符串: "Hello, %s World!" (位于 argv[1])';
+        leakedValues = [INITIAL_RSP + 16];
+      } else if (currentFormat === '%x') {
+        output = '[LEAK] 栈上值: 0x7fffffffe4a0\n';
+        output += '[LEAK] 栈上值: 0x1\n';
+        output += '[LEAK] 栈上值: 0x7fffffffe4c8\n';
+        output += '[LEAK] 栈上值: 0x0';
+        leakedValues = [stackAddrs[0], stackAddrs[1], stackAddrs[2], stackAddrs[3]];
+      } else if (currentFormat === '%p') {
+        output = '[LEAK] 0x7fffffffe4a0\n';
+        output += '[LEAK] 0x0000000000000001\n';
+        output += '[LEAK] 0x7fffffffe4c8\n';
+        output += '[LEAK] 0x0\n';
+        output += '[LEAK] 0x4141414141414141\n';
+        output += '[LEAK] 0x4242424242424242\n';
+        output += '[LEAK] 0x401100\n';
+        output += '[LEAK] 0x7fffffffe420';
+        leakedValues = stackAddrs;
+      } else if (currentFormat === '%d') {
+        output = '[LEAK] 2137051648 (十进制)\n';
+        output += '[LEAK] 1\n';
+        output += '[LEAK] 140737488346440';
+        leakedValues = [stackAddrs[0], stackAddrs[1], stackAddrs[2]];
+      } else if (currentFormat === '%c') {
+        output = '[LEAK] 字符: H (0x48)\n';
+        output += '[LEAK] 字符: @ (0x00)';
+        leakedValues = [stackAddrs[4]];
+      } else if (currentFormat === '%n') {
+        output = '[DANGER] 写入操作! 准备写入到: 0x4141414141414141';
+        leakedValues = [INITIAL_RSP + 32];
+      } else if (currentFormat.includes('%')) {
+        output = '[LEAK] 解析格式: ' + currentFormat;
+        const count = currentFormat.match(/(\d+)/)?.[1] || '1';
+        output += '\n[LEAK] 读取第 ' + count + ' 个参数: 0x' + stackAddrs[parseInt(count) - 1]?.toString(16) || '0';
+        leakedValues = [stackAddrs[parseInt(count) - 1] || 0];
+      }
+
+      outputEl.innerText = output;
+
+      // Show leaked container
+      const leakedContainer = document.getElementById('leaked-container');
+      const leakedValuesEl = document.getElementById('leaked-values');
+      
+      if (leakedValues.length > 0) {
+        leakedContainer.classList.remove('hidden');
+        leakedValuesEl.innerHTML = leakedValues.map(addr => {
+          const val = memoryData[addr] || '0x0';
+          const name = Object.entries({
+            [INITIAL_RSP + 32]: 'env[0] (AAAAAAA)',
+            [INITIAL_RSP + 40]: 'env[1] (BBBBBBB)',
+            [INITIAL_RSP + 48]: 'Return Addr',
+            [INITIAL_RSP + 56]: 'Saved RBP'
+          }).find(([a]) => parseInt(a) === addr)?.[1] || 'Stack Value';
+          
+          return `<div>地址 ${'0x' + addr.toString(16)} → ${val} <span class="text-gray-500">(${name})</span></div>`;
+        }).join('');
+      }
+
+      renderMemory();
+      lucide.createIcons();
+    }
+
+    function resetFormat() {
+      currentFormat = '%s';
+      posIndex = 1;
+      leakedValues = [];
+      initMemory();
+      
+      document.getElementById('current-format').innerText = '%s';
+      document.getElementById('format-input').innerText = '%s';
+      document.getElementById('pos-display').innerText = '1$';
+      document.getElementById('printf-output').innerText = '点击"执行 printf"查看输出...';
+      document.getElementById('leaked-container').classList.add('hidden');
+      
+      selectFormat('%s');
+      renderMemory();
+      lucide.createIcons();
+    }
+
+    initMemory();
+    selectFormat('%s');
+    renderMemory();
+    lucide.createIcons();
+  </script>
+</body>
+</html>

@@ -1,0 +1,441 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ROP链构造可视化</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <style>
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(-10px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+    .animate-fade-in {
+      animation: fadeIn 0.3s ease-out forwards;
+    }
+    @keyframes slideIn {
+      from { opacity: 0; transform: translateX(-20px); }
+      to { opacity: 1; transform: translateX(0); }
+    }
+    .animate-slide-in {
+      animation: slideIn 0.3s ease-out forwards;
+    }
+  </style>
+</head>
+<body class="min-h-screen bg-gray-900 text-gray-200 p-6 font-mono selection:bg-green-500/30">
+  <div class="max-w-6xl mx-auto space-y-6">
+    
+    <!-- Header -->
+    <div class="border-b border-gray-700 pb-4">
+      <div class="flex items-center justify-between">
+        <div>
+          <a href="../index.html" class="text-blue-400 hover:text-blue-300 text-sm flex items-center gap-1 mb-2">
+            <i data-lucide="arrow-left" class="w-4 h-4"></i>
+            返回首页
+          </a>
+          <h1 class="text-2xl font-bold text-white flex items-center gap-2">
+            <i data-lucide="git-branch" class="w-6 h-6 text-green-400"></i>
+            ROP链构造可视化
+          </h1>
+          <p class="text-gray-400 mt-2">
+            学习如何通过拼接已有代码片段 (gadgets) 构建完整的攻击载荷，绕过DEP防护。
+          </p>
+        </div>
+        <div class="flex gap-2">
+          <span class="px-3 py-1 bg-green-900/30 text-green-400 rounded-full text-sm border border-green-800">进阶</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="grid grid-cols-1 lg:grid-cols-12 gap-6">
+      
+      <!-- Left Panel -->
+      <div class="lg:col-span-5 space-y-4">
+        
+        <!-- Attack Goal -->
+        <div class="bg-red-900/20 border border-red-800/50 rounded-lg p-4">
+          <h3 class="text-red-400 font-bold mb-2 flex items-center gap-2">
+            <i data-lucide="target" class="w-4 h-4"></i>
+            攻击目标
+          </h3>
+          <p class="text-gray-300 text-sm">
+            调用 <span class="text-yellow-400">system("/bin/sh")</span> 获取shell
+          </p>
+        </div>
+
+        <!-- Available Gadgets -->
+        <div class="bg-gray-800 rounded-lg border border-gray-700 overflow-hidden shadow-lg">
+          <div class="bg-gray-950 px-4 py-2 text-sm text-gray-400 font-semibold border-b border-gray-700 flex items-center gap-2">
+            <i data-lucide="box" class="w-4 h-4"></i> 可用 Gadgets
+          </div>
+          <div class="p-4 space-y-2" id="gadgets-list">
+            <div class="gadget-item bg-gray-900 border border-gray-700 rounded p-2 cursor-pointer hover:border-green-500 transition-all" onclick="selectGadget(0)">
+              <div class="text-green-400 text-xs font-bold">Gadget 1: pop rdi; ret</div>
+              <div class="text-gray-500 text-xs mt-1">0x400593: pop rdi; ret</div>
+            </div>
+            <div class="gadget-item bg-gray-900 border border-gray-700 rounded p-2 cursor-pointer hover:border-green-500 transition-all" onclick="selectGadget(1)">
+              <div class="text-green-400 text-xs font-bold">Gadget 2: pop rsi; pop r15; ret</div>
+              <div class="text-gray-500 text-xs mt-1">0x400591: pop rsi; pop r15; ret</div>
+            </div>
+            <div class="gadget-item bg-gray-900 border border-gray-700 rounded p-2 cursor-pointer hover:border-green-500 transition-all" onclick="selectGadget(2)">
+              <div class="text-green-400 text-xs font-bold">Gadget 3: ret</div>
+              <div class="text-gray-500 text-xs mt-1">0x400594: ret</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Chain Builder -->
+        <div class="bg-gray-800 rounded-lg border border-gray-700 overflow-hidden shadow-lg">
+          <div class="bg-gray-950 px-4 py-2 text-sm text-gray-400 font-semibold border-b border-gray-700 flex items-center gap-2">
+            <i data-lucide="link" class="w-4 h-4"></i> ROP Chain 构建器
+          </div>
+          <div class="p-4 space-y-3" id="chain-builder">
+            <!-- Chain items will be added here -->
+          </div>
+          <div class="border-t border-gray-700 p-3 flex gap-2">
+            <button onclick="addToChain()" class="flex-1 bg-green-600 hover:bg-green-500 text-white py-2 px-3 rounded text-sm font-bold flex justify-center items-center gap-1 transition-all">
+              <i data-lucide="plus" class="w-4 h-4"></i> 添加到链
+            </button>
+            <button onclick="executeChain()" class="flex-1 bg-red-600 hover:bg-red-500 text-white py-2 px-3 rounded text-sm font-bold flex justify-center items-center gap-1 transition-all">
+              <i data-lucide="zap" class="w-4 h-4"></i> 执行!
+            </button>
+          </div>
+        </div>
+
+        <!-- Execution Result -->
+        <div class="bg-gray-800 rounded-lg border border-gray-700 overflow-hidden shadow-lg">
+          <div class="bg-gray-950 px-4 py-2 text-sm text-gray-400 font-semibold border-b border-gray-700 flex items-center gap-2">
+            <i data-lucide="terminal" class="w-4 h-4"></i> 执行结果
+          </div>
+          <div id="rop-output" class="p-4 min-h-[80px] text-gray-500 text-sm font-mono bg-gray-950">
+            构建ROP链并点击"执行!"...
+          </div>
+        </div>
+
+        <!-- Explanation Card -->
+        <div class="bg-blue-900/20 border border-blue-800/50 rounded-lg p-4">
+          <h3 class="text-blue-400 font-bold mb-2 flex items-center gap-2">
+            <i data-lucide="book-open" class="w-4 h-4"></i>
+            ROP 原理解析
+          </h3>
+          <p id="explanation-text" class="text-gray-300 text-sm leading-relaxed">
+            ROP (Return-Oriented Programming) 通过拼接程序中已存在的代码片段来构建攻击链。每个 gadget 以 ret 结尾，使得攻击者可以控制执行流。
+          </p>
+        </div>
+
+        <!-- Knowledge Card -->
+        <div class="bg-gray-800 rounded-lg border border-gray-700 p-4">
+          <h3 class="text-green-400 font-bold mb-2 flex items-center gap-2">
+            <i data-lucide="lightbulb" class="w-4 h-4"></i>
+            关键知识点
+          </h3>
+          <ul class="text-gray-300 text-sm space-y-2">
+            <li class="flex items-start gap-2">
+              <span class="text-green-400">1.</span>
+              <span>DEP/NX 禁止执行栈上代码，但可以执行已有的 gadget</span>
+            </li>
+            <li class="flex items-start gap-2">
+              <span class="text-green-400">2.</span>
+              <span>每个 gadget 以 ret (0xc3) 结尾</span>
+            </li>
+            <li class="flex items-start gap-2">
+              <span class="text-green-400">3.</span>
+              <span>调用 system("/bin/sh") 需要设置 rdi 为参数字符串地址</span>
+            </li>
+            <li class="flex items-start gap-2">
+              <span class="text-yellow-400">!</span>
+              <span>使用 ROPgadget 或 ropper 工具搜索 gadgets</span>
+            </li>
+          </ul>
+        </div>
+
+      </div>
+
+      <!-- Right Panel: Visualization -->
+      <div class="lg:col-span-7 space-y-4">
+        
+        <!-- Memory Layout -->
+        <div class="bg-gray-800 rounded-lg border border-gray-700 p-4 shadow-lg">
+          <h3 class="text-lg font-bold text-gray-300 mb-4 border-b border-gray-700 pb-2 text-center">
+            Exploit 布局 (低地址 → 高地址)
+          </h3>
+          <div class="space-y-1" id="exploit-layout"></div>
+        </div>
+
+        <!-- Step by Step Execution -->
+        <div class="bg-gray-800 rounded-lg border border-gray-700 p-4 shadow-lg">
+          <h3 class="text-lg font-bold text-gray-300 mb-4 border-b border-gray-700 pb-2 text-center flex items-center justify-center gap-2">
+            <i data-lucide="play" class="w-5 h-5 text-green-400"></i>
+            执行流程
+          </h3>
+          <div class="space-y-3" id="execution-steps"></div>
+        </div>
+
+        <!-- Shell Spawned -->
+        <div id="shell-container" class="hidden bg-green-900/30 border border-green-500 rounded-lg p-6 text-center animate-fade-in">
+          <div class="text-6xl mb-4">$</div>
+          <h2 class="text-2xl font-bold text-green-400 mb-2">Shell 已获取!</h2>
+          <p class="text-gray-300">恭喜! 你成功构造了 ROP 链并调用了 system("/bin/sh")</p>
+          <div class="mt-4 bg-gray-900 rounded p-3 text-left text-sm">
+            <span class="text-green-400">$</span> whoami<br/>
+            <span class="text-gray-400">root</span><br/>
+            <span class="text-green-400">$</span> id<br/>
+            <span class="text-gray-400">uid=0(root) gid=0(root) groups=0(root)</span>
+          </div>
+        </div>
+
+      </div>
+
+    </div>
+  </div>
+
+  <script>
+    let chain = [];
+    let selectedGadget = null;
+    let executing = false;
+
+    const gadgets = [
+      { 
+        id: 0, 
+        name: 'pop rdi; ret', 
+        addr: '0x400593',
+        code: 'pop rdi\nret',
+        effect: '将栈顶值弹出到 rdi，然后返回',
+        color: 'green'
+      },
+      { 
+        id: 1, 
+        name: 'pop rsi; pop r15; ret', 
+        addr: '0x400591',
+        code: 'pop rsi\npop r15\nret',
+        effect: '依次弹出两个值到 rsi 和 r15',
+        color: 'yellow'
+      },
+      { 
+        id: 2, 
+        name: 'ret', 
+        addr: '0x400594',
+        code: 'ret',
+        effect: '简单的返回指令，用于栈对齐',
+        color: 'blue'
+      }
+    ];
+
+    const usefulAddresses = {
+      'system()': '0x401060',
+      '/bin/sh 字符串': '0x402008',
+      'pop rdi; ret': '0x400593',
+      'pop rsi; pop r15; ret': '0x400591',
+      'ret': '0x400594',
+      'exit()': '0x401070'
+    };
+
+    function selectGadget(id) {
+      selectedGadget = gadgets.find(g => g.id === id);
+      document.querySelectorAll('.gadget-item').forEach((el, idx) => {
+        el.classList.remove('ring-2', 'ring-green-500');
+        if (idx === id) {
+          el.classList.add('ring-2', 'ring-green-500');
+        }
+      });
+    }
+
+    function addToChain() {
+      if (!selectedGadget) {
+        alert('请先选择一个 Gadget!');
+        return;
+      }
+      chain.push({ ...selectedGadget, seq: chain.length + 1 });
+      renderChain();
+      renderExploitLayout();
+    }
+
+    function addAddressToChain(type, value) {
+      const label = type;
+      chain.push({ 
+        type: 'address',
+        name: label, 
+        addr: usefulAddresses[label] || value,
+        value: value,
+        seq: chain.length + 1 
+      });
+      renderChain();
+      renderExploitLayout();
+    }
+
+    function removeFromChain(seq) {
+      chain = chain.filter(item => item.seq !== seq);
+      chain.forEach((item, idx) => item.seq = idx + 1);
+      renderChain();
+      renderExploitLayout();
+    }
+
+    function renderChain() {
+      const container = document.getElementById('chain-builder');
+      if (chain.length === 0) {
+        container.innerHTML = '<div class="text-gray-500 text-sm text-center py-4">点击上方按钮添加 gadgets...</div>';
+        return;
+      }
+
+      container.innerHTML = chain.map((item, idx) => {
+        const colorClass = item.color ? `border-${item.color}-500 text-${item.color}-400` : 'border-yellow-500 text-yellow-400';
+        const bgClass = item.color ? `bg-${item.color}-950/30` : 'bg-yellow-950/30';
+        
+        return `
+          <div class="flex items-center gap-2 animate-slide-in" style="animation-delay: ${idx * 0.05}s">
+            <div class="text-gray-500 text-xs w-6">${item.seq}.</div>
+            <div class="flex-1 ${bgClass} border ${colorClass.split('text-')[0]}border rounded p-2 cursor-pointer hover:opacity-80 transition-all" onclick="removeFromChain(${item.seq})">
+              <div class="font-bold text-sm">${item.name}</div>
+              <div class="text-xs opacity-70">${item.addr || item.value}</div>
+            </div>
+            <button onclick="removeFromChain(${item.seq})" class="text-gray-500 hover:text-red-400 p-1">
+              <i data-lucide="x" class="w-4 h-4"></i>
+            </button>
+          </div>
+        `;
+      }).join('');
+      lucide.createIcons();
+    }
+
+    function renderExploitLayout() {
+      const container = document.getElementById('exploit-layout');
+      const baseAddr = 0x7fffffffe380;
+      
+      const slots = chain.map((item, idx) => {
+        let content = item.name;
+        let bgClass = 'bg-green-900/40 border-green-700';
+        let textClass = 'text-green-300';
+        
+        if (item.type === 'address') {
+          bgClass = 'bg-yellow-900/40 border-yellow-700';
+          textClass = 'text-yellow-300';
+          content = item.value;
+        }
+
+        return {
+          addr: baseAddr + (chain.length - idx - 1) * 8,
+          content: content,
+          bgClass: bgClass,
+          textClass: textClass
+        };
+      }).reverse();
+
+      container.innerHTML = slots.map((slot, idx) => `
+        <div class="flex items-center gap-4">
+          <div class="w-32 text-right text-xs text-gray-500 font-mono">
+            ${'0x' + slot.addr.toString(16)}
+          </div>
+          <div class="flex-1 border ${slot.bgClass} rounded p-2 flex justify-between items-center">
+            <div class="font-mono ${slot.textClass} text-sm">${slot.content}</div>
+            <div class="text-xs text-gray-500">← ${idx === slots.length - 1 ? 'RET addr' : '参数' + (slots.length - idx - 1)}</div>
+          </div>
+        </div>
+      `).join('');
+    }
+
+    function executeChain() {
+      if (chain.length === 0) {
+        document.getElementById('rop-output').innerHTML = '<span class="text-red-400">错误: ROP链为空!</span>';
+        return;
+      }
+
+      // Check if chain makes sense for system("/bin/sh")
+      const hasSystem = chain.some(c => c.addr === usefulAddresses['system()'] || c.name === 'system()');
+      const hasBinSh = chain.some(c => c.addr === usefulAddresses['/bin/sh 字符串'] || c.value === '"/bin/sh"' || c.name === '/bin/sh 字符串');
+      const hasPopRdi = chain.some(c => c.addr === usefulAddresses['pop rdi; ret'] || c.name === 'pop rdi; ret');
+      
+      const output = document.getElementById('rop-output');
+      let result = '';
+      
+      if (hasPopRdi && hasBinSh && hasSystem) {
+        result = `<span class="text-green-400">[*] ROP链构建成功!</span>\n\n`;
+        result += `<span class="text-gray-400">[*] 执行流程:</span>\n`;
+        
+        let step = 1;
+        chain.forEach(item => {
+          if (item.name === 'pop rdi; ret') {
+            result += `<span class="text-yellow-400">[Step ${step++}]</span> pop rdi → <span class="text-yellow-300">"/bin/sh" 地址</span>\n`;
+          } else if (item.name === '/bin/sh 字符串' || item.value?.includes('/bin/sh')) {
+            result += `<span class="text-yellow-400">[Step ${step++}]</span> <span class="text-blue-300">参数入栈: ${item.value}</span>\n`;
+          } else if (item.name === 'ret') {
+            result += `<span class="text-yellow-400">[Step ${step++}]</span> ret → <span class="text-blue-300">栈对齐</span>\n`;
+          } else if (item.name === 'system()') {
+            result += `<span class="text-yellow-400">[Step ${step++}]</span> call system()\n`;
+          }
+        });
+        
+        result += `\n<span class="text-green-400">[+] 调用 system("/bin/sh") 成功!</span>`;
+        
+        document.getElementById('shell-container').classList.remove('hidden');
+      } else {
+        result = `<span class="text-yellow-400">[!] ROP链不完整</span>\n\n`;
+        result += `要调用 system("/bin/sh")，需要:\n`;
+        result += `1. <span class="text-green-400">pop rdi; ret</span> - 设置第一个参数\n`;
+        result += `2. <span class="text-yellow-400">"/bin/sh" 地址</span> - 参数字符串\n`;
+        result += `3. <span class="text-blue-400">system()</span> - 调用函数\n`;
+        result += `\n<span class="text-red-400">当前缺少: ${
+          !hasPopRdi ? 'pop rdi; ret ' : ''
+        }${!hasBinSh ? '/bin/sh字符串 ' : ''
+        }${!hasSystem ? 'system()地址' : ''}</span>`;
+        
+        document.getElementById('shell-container').classList.add('hidden');
+      }
+      
+      output.innerHTML = result;
+      
+      // Show execution steps
+      renderExecutionSteps();
+    }
+
+    function renderExecutionSteps() {
+      const container = document.getElementById('execution-steps');
+      
+      const steps = [
+        { desc: '溢出覆盖返回地址', detail: '返回地址被指向第一个 gadget', status: 'done' },
+        { desc: '执行 gadget 1: pop rdi; ret', detail: '栈上值被弹出到 rdi 寄存器', status: 'active' },
+        { desc: '执行 gadget 2: /bin/sh 地址入栈', detail: '参数准备就绪', status: 'pending' },
+        { desc: '执行 gadget 3: ret → system()', detail: '控制流转移到 system 函数', status: 'pending' },
+        { desc: '调用 system("/bin/sh")', detail: '成功执行系统命令', status: 'pending' }
+      ];
+
+      container.innerHTML = steps.map((step, idx) => {
+        let statusClass = 'bg-gray-700 border-gray-600 text-gray-400';
+        let iconClass = 'text-gray-500';
+        
+        if (step.status === 'done') {
+          statusClass = 'bg-green-900/30 border-green-700 text-green-300';
+          iconClass = 'text-green-400';
+        } else if (step.status === 'active') {
+          statusClass = 'bg-blue-900/30 border-blue-500 text-blue-300 ring-1 ring-blue-500';
+          iconClass = 'text-blue-400';
+        }
+
+        return `
+          <div class="flex items-center gap-3 p-3 rounded-lg border ${statusClass} transition-all">
+            <div class="w-8 h-8 rounded-full ${statusClass} flex items-center justify-center ${iconClass}">
+              ${step.status === 'done' ? '<i data-lucide="check" class="w-4 h-4"></i>' : 
+                step.status === 'active' ? '<i data-lucide="loader" class="w-4 h-4 animate-spin"></i>' :
+                '<span class="text-sm font-bold">' + (idx + 1) + '</span>'}
+            </div>
+            <div>
+              <div class="font-bold text-sm">${step.desc}</div>
+              <div class="text-xs opacity-70">${step.detail}</div>
+            </div>
+          </div>
+        `;
+      }).join('');
+      lucide.createIcons();
+    }
+
+    // Quick add buttons
+    function quickAdd(item) {
+      addAddressToChain(item, usefulAddresses[item]);
+    }
+
+    renderChain();
+    renderExploitLayout();
+    lucide.createIcons();
+  </script>
+</body>
+</html>

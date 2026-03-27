@@ -1,0 +1,388 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>栈溢出原理可视化：函数序言与 gets 溢出</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <style>
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(-10px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+    .animate-fade-in {
+      animation: fadeIn 0.3s ease-out forwards;
+    }
+  </style>
+</head>
+<body class="min-h-screen bg-gray-900 text-gray-200 p-6 font-mono selection:bg-blue-500/30">
+  <div class="max-w-6xl mx-auto space-y-6">
+    
+    <!-- Header -->
+    <div class="border-b border-gray-700 pb-4">
+      <div class="flex items-center justify-between">
+        <div>
+          <a href="../index.html" class="text-blue-400 hover:text-blue-300 text-sm flex items-center gap-1 mb-2">
+            <i data-lucide="arrow-left" class="w-4 h-4"></i>
+            返回首页
+          </a>
+          <h1 class="text-2xl font-bold text-white flex items-center gap-2">
+            <i data-lucide="layers" class="w-6 h-6 text-red-400"></i>
+            栈溢出原理可视化：函数序言与 gets 溢出
+          </h1>
+          <p class="text-gray-400 mt-2">
+            观察汇编指令如何开辟栈帧，以及不安全的 gets 函数如何越界覆盖返回地址。
+          </p>
+        </div>
+        <div class="flex gap-2">
+          <span class="px-3 py-1 bg-red-900/30 text-red-400 rounded-full text-sm border border-red-800">入门</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="grid grid-cols-1 lg:grid-cols-12 gap-6">
+      
+      <!-- Left Panel: Assembly & Controls -->
+      <div class="lg:col-span-5 space-y-4">
+        
+        <!-- Assembly Code Viewer -->
+        <div class="bg-gray-800 rounded-lg border border-gray-700 overflow-hidden shadow-lg">
+          <div class="bg-gray-950 px-4 py-2 text-sm text-gray-400 font-semibold border-b border-gray-700 flex items-center gap-2">
+            <i data-lucide="cpu" class="w-4 h-4"></i> Disassembly
+          </div>
+          <div class="p-4 space-y-1" id="assembly-list"></div>
+        </div>
+
+        <!-- Registers Viewer -->
+        <div class="bg-gray-800 rounded-lg border border-gray-700 p-4 shadow-lg flex justify-around">
+          <div class="text-center">
+            <div class="text-xs text-gray-500 font-bold mb-1">RBP (栈底指针)</div>
+            <div id="reg-rbp" class="text-lg text-blue-400 font-bold bg-gray-900 px-3 py-1 rounded border border-gray-700 shadow-inner">
+              0x7fffffffe420
+            </div>
+          </div>
+          <div class="text-center">
+            <div class="text-xs text-gray-500 font-bold mb-1">RSP (栈顶指针)</div>
+            <div id="reg-rsp" class="text-lg text-red-400 font-bold bg-gray-900 px-3 py-1 rounded border border-gray-700 shadow-inner">
+              0x7fffffffe3f8
+            </div>
+          </div>
+        </div>
+
+        <!-- Controls -->
+        <div class="flex gap-4" id="controls-section">
+          <button id="btn-next" class="flex-1 bg-blue-600 hover:bg-blue-500 text-white py-3 px-4 rounded-lg font-bold flex justify-center items-center gap-2 transition-all shadow-lg active:scale-95">
+            <i data-lucide="play" class="w-5 h-5"></i> 下一步 (Step)
+          </button>
+          <button id="btn-reset" class="bg-gray-700 hover:bg-gray-600 text-white py-3 px-4 rounded-lg font-bold flex justify-center items-center gap-2 transition-all shadow-lg active:scale-95">
+            <i data-lucide="rotate-ccw" class="w-5 h-5"></i> 重置
+          </button>
+        </div>
+
+        <!-- Interactive Input -->
+        <div id="input-section" class="hidden bg-yellow-900/20 border border-yellow-700/50 rounded-lg p-4 animate-fade-in shadow-lg">
+          <label class="block text-sm text-yellow-500 font-bold mb-2 flex items-center gap-2">
+            <i data-lucide="alert-triangle" class="w-4 h-4"></i> 
+            尝试输入超出 16 字节的内容 (如 AAAAAAAAAAAAAAAAAAAAAAAA)：
+          </label>
+          <input 
+            type="text" 
+            id="user-input"
+            placeholder="输入任意字符覆盖栈..."
+            class="w-full bg-gray-950 border border-yellow-700/50 text-yellow-400 px-3 py-2 rounded focus:outline-none focus:border-yellow-400 shadow-inner"
+          />
+          <div class="text-xs text-gray-400 mt-2 flex justify-between">
+            <span>当前长度: <span id="input-len">0</span> 字节</span>
+            <span>buf 容量: 16 字节</span>
+          </div>
+        </div>
+
+        <!-- Explanation Card -->
+        <div class="bg-blue-900/20 border border-blue-800/50 rounded-lg p-4">
+          <h3 class="text-blue-400 font-bold mb-2 flex items-center gap-2">
+            <i data-lucide="book-open" class="w-4 h-4"></i>
+            步骤解析
+          </h3>
+          <p id="explanation-text" class="text-gray-300 text-sm leading-relaxed"></p>
+        </div>
+
+        <!-- Knowledge Card -->
+        <div class="bg-gray-800 rounded-lg border border-gray-700 p-4">
+          <h3 class="text-green-400 font-bold mb-2 flex items-center gap-2">
+            <i data-lucide="lightbulb" class="w-4 h-4"></i>
+            关键知识点
+          </h3>
+          <ul class="text-gray-300 text-sm space-y-2">
+            <li class="flex items-start gap-2">
+              <span class="text-green-400">1.</span>
+              <span><strong>push rbp</strong> - 保存调用者的栈帧基址</span>
+            </li>
+            <li class="flex items-start gap-2">
+              <span class="text-green-400">2.</span>
+              <span><strong>mov rbp, rsp</strong> - 建立新的栈帧</span>
+            </li>
+            <li class="flex items-start gap-2">
+              <span class="text-green-400">3.</span>
+              <span><strong>sub rsp, 0x10</strong> - 分配16字节局部变量空间</span>
+            </li>
+            <li class="flex items-start gap-2">
+              <span class="text-red-400">4.</span>
+              <span><strong>gets(buf)</strong> - 不检查长度，可溢出</span>
+            </li>
+          </ul>
+        </div>
+
+      </div>
+
+      <!-- Right Panel: Stack Visualization -->
+      <div class="lg:col-span-7 bg-gray-800 rounded-lg border border-gray-700 p-4 shadow-lg flex flex-col">
+        <h2 class="text-lg font-bold text-gray-300 mb-4 border-b border-gray-700 pb-2 text-center">
+          Stack Memory (低地址 ↓ 高地址)
+        </h2>
+        
+        <div class="flex-1 flex flex-col justify-center">
+          <div class="space-y-2 relative" id="memory-list"></div>
+        </div>
+
+        <!-- PWNED Alert -->
+        <div id="alert-container"></div>
+      </div>
+
+    </div>
+  </div>
+
+  <script>
+    let step = 0;
+    let userInput = '';
+    const INITIAL_RBP = 0x7fffffffe420;
+    const INITIAL_RSP = 0x7fffffffe3f8;
+    let registers = { rbp: INITIAL_RBP, rsp: INITIAL_RSP };
+    const initialMemory = {
+      0x7fffffffe400: '0x0000000000000000',
+      0x7fffffffe3f8: '0x00000000004010a0',
+      0x7fffffffe3f0: '0x0000000000000000',
+      0x7fffffffe3e8: '0x0000000000000000',
+      0x7fffffffe3e0: '0x0000000000000000',
+      0x7fffffffe3d8: '0x0000000000000000'
+    };
+    let memory = { ...initialMemory };
+
+    const stepsInfo = [
+      {
+        code: "// 准备进入 vulnerable_function",
+        desc: "此时 main 函数刚刚执行完 call 指令，将返回地址压入了栈中。RSP 指向返回地址，RBP 还是 main 函数的栈底。"
+      },
+      {
+        code: "push rbp",
+        desc: "【保存锚点】将 main 函数的 rbp (Saved RBP) 压入栈中。注意 RSP 减小了 8 字节（向低地址移动），此时栈顶存放的就是上一个函数的 RBP。"
+      },
+      {
+        code: "mov rbp, rsp",
+        desc: "【建立新栈帧】将当前的 RSP 赋值给 RBP。此时 vulnerable_function 的栈底被确立，RBP 和 RSP 指向同一个位置。"
+      },
+      {
+        code: "sub rsp, 0x10",
+        desc: "【分配局部变量】将 RSP 减去 0x10 (16字节)。这就在栈上腾出了 16 字节的连续空间，作为局部变量 buf[16] 的存储区域！"
+      },
+      {
+        code: "gets(buf)",
+        desc: "【危险操作】gets 不检查长度，将用户的输入从 buf 的起始地址 (RBP - 0x10) 往高地址写入。请尝试在下方输入超过 16 个字符！"
+      }
+    ];
+
+    const hexFormat = (num) => `0x${num.toString(16)}`;
+
+    function render() {
+      renderAssembly();
+      renderRegisters();
+      renderControls();
+      renderInputSection();
+      renderExplanation();
+      renderMemory();
+      renderAlert();
+      lucide.createIcons();
+    }
+
+    function renderAssembly() {
+      const container = document.getElementById('assembly-list');
+      container.innerHTML = stepsInfo.map((s, idx) => `
+        <div class="px-3 py-2 rounded flex items-center gap-3 transition-colors ${ step === idx ? 'bg-blue-900/40 border-l-4 border-blue-400 text-blue-300' : 'text-gray-500 border-l-4 border-transparent' }">
+          ${step === idx ? '<i data-lucide="arrow-right" class="w-4 h-4 text-blue-400"></i>' : '<div class="w-4 h-4"></div>'}
+          <span>${s.code}</span>
+        </div>
+      `).join('');
+    }
+
+    function renderRegisters() {
+      document.getElementById('reg-rbp').innerText = hexFormat(registers.rbp);
+      document.getElementById('reg-rsp').innerText = hexFormat(registers.rsp);
+    }
+
+    function renderControls() {
+      const btnNext = document.getElementById('btn-next');
+      if (step >= 4) {
+        btnNext.disabled = true;
+        btnNext.innerHTML = '<i data-lucide="play" class="w-5 h-5"></i> 执行完毕';
+        btnNext.className = "flex-1 bg-gray-700 text-gray-500 py-3 px-4 rounded-lg font-bold flex justify-center items-center gap-2 transition-all shadow-lg cursor-not-allowed";
+      } else {
+        btnNext.disabled = false;
+        btnNext.innerHTML = '<i data-lucide="play" class="w-5 h-5"></i> 下一步 (Step)';
+        btnNext.className = "flex-1 bg-blue-600 hover:bg-blue-500 text-white py-3 px-4 rounded-lg font-bold flex justify-center items-center gap-2 transition-all shadow-lg active:scale-95";
+      }
+    }
+
+    function renderInputSection() {
+      const section = document.getElementById('input-section');
+      if (step === 4) {
+        section.classList.remove('hidden');
+        document.getElementById('input-len').innerText = userInput.length;
+      } else {
+        section.classList.add('hidden');
+      }
+    }
+
+    function renderExplanation() {
+      document.getElementById('explanation-text').innerText = stepsInfo[step].desc;
+    }
+
+    function renderMemory() {
+      const container = document.getElementById('memory-list');
+      const memoryLayout = [
+        { addr: 0x7fffffffe3d8, label: "Unused Space", size: 8 },
+        { addr: 0x7fffffffe3e0, label: "buf[0:7]", size: 8 },
+        { addr: 0x7fffffffe3e8, label: "buf[8:15]", size: 8 },
+        { addr: 0x7fffffffe3f0, label: "Saved RBP", size: 8, isTarget: userInput.length > 16 },
+        { addr: 0x7fffffffe3f8, label: "Return Address", size: 8, isTarget: userInput.length > 24 },
+        { addr: 0x7fffffffe400, label: "Caller's Stack", size: 8 }
+      ];
+
+      container.innerHTML = memoryLayout.map(slot => {
+        const isRbp = registers.rbp === slot.addr;
+        const isRsp = registers.rsp === slot.addr;
+        const value = memory[slot.addr] || '0x0000000000000000';
+        
+        let bgClass = "bg-gray-900";
+        let borderClass = "border-gray-700";
+        let textClass = "text-gray-400";
+
+        if (step >= 1 && slot.label === "Saved RBP") {
+          bgClass = "bg-blue-950/40";
+          textClass = "text-blue-300";
+          borderClass = "border-blue-900";
+        }
+        if (slot.label === "Return Address") {
+          bgClass = "bg-purple-950/40";
+          textClass = "text-purple-300";
+          borderClass = "border-purple-900";
+        }
+        if (step >= 3 && slot.label.includes("buf")) {
+          bgClass = "bg-green-950/40";
+          textClass = "text-green-300";
+          borderClass = "border-green-900";
+        }
+        if (slot.isTarget && step === 4) {
+          bgClass = "bg-red-900/60";
+          borderClass = "border-red-500 shadow-[0_0_15px_rgba(239,68,68,0.5)]";
+          textClass = "text-white font-bold";
+        }
+
+        const rbpMarker = isRbp ? `<div class="text-blue-400 font-bold text-xs flex items-center gap-1 animate-pulse">RBP <i data-lucide="arrow-right" class="w-3 h-3"></i></div>` : '';
+        const rspMarker = isRsp ? `<div class="text-red-400 font-bold text-xs flex items-center gap-1 animate-pulse mt-1">RSP <i data-lucide="arrow-right" class="w-3 h-3"></i></div>` : '';
+        const overlay = (slot.isTarget && step === 4) ? `<div class="absolute inset-0 bg-red-500/10 pointer-events-none animate-pulse"></div>` : '';
+
+        return `
+          <div class="flex items-center gap-4 relative group">
+            <div class="w-24 text-right flex flex-col items-end justify-center min-h-[40px]">
+              ${rbpMarker}
+              ${rspMarker}
+            </div>
+            <div class="flex-1 border ${borderClass} ${bgClass} rounded-md p-3 flex justify-between items-center transition-all duration-300 relative overflow-hidden">
+              <div class="text-gray-500 text-xs w-32 border-r border-gray-700/50 pr-2">
+                ${hexFormat(slot.addr)}
+              </div>
+              <div class="flex-1 text-center font-mono ${textClass} tracking-widest px-2 break-all">
+                ${value}
+              </div>
+              <div class="text-xs text-gray-500 w-28 text-right font-semibold">
+                ${slot.label}
+              </div>
+              ${overlay}
+            </div>
+          </div>
+        `;
+      }).join('');
+    }
+
+    function renderAlert() {
+      const container = document.getElementById('alert-container');
+      if (userInput.length > 24 && step === 4) {
+        container.innerHTML = `
+          <div class="mt-6 bg-red-900/50 border border-red-500 text-red-200 p-4 rounded-lg text-center animate-bounce shadow-[0_0_20px_rgba(239,68,68,0.5)]">
+            <h2 class="text-2xl font-black mb-1">PWNED!</h2>
+            <p class="text-sm">返回地址已被覆盖！当函数执行 ret 指令时，程序将跳转到你输入的数据所构成的地址！</p>
+          </div>
+        `;
+      } else {
+        container.innerHTML = '';
+      }
+    }
+
+    function handleNextStep() {
+      if (step >= 4) return;
+      step++;
+      if (step === 1) {
+        registers.rsp -= 8;
+        memory[registers.rsp] = '0x00007fffffffe420';
+      } else if (step === 2) {
+        registers.rbp = registers.rsp;
+      } else if (step === 3) {
+        registers.rsp -= 0x10;
+      }
+      render();
+    }
+
+    function handleReset() {
+      step = 0;
+      registers = { rbp: INITIAL_RBP, rsp: INITIAL_RSP };
+      memory = { ...initialMemory };
+      userInput = '';
+      document.getElementById('user-input').value = '';
+      render();
+    }
+
+    function handleInput(e) {
+      userInput = e.target.value;
+      updateMemoryFromInput();
+      renderInputSection();
+      renderMemory();
+      renderAlert();
+      lucide.createIcons();
+    }
+
+    function updateMemoryFromInput() {
+      if (step !== 4) return;
+      memory[0x7fffffffe3f8] = '0x00000000004010a0';
+      memory[0x7fffffffe3f0] = '0x00007fffffffe420';
+      memory[0x7fffffffe3e8] = '0x0000000000000000';
+      memory[0x7fffffffe3e0] = '0x0000000000000000';
+
+      for (let i = 0; i < userInput.length; i += 8) {
+        const chunk = userInput.slice(i, i + 8).padEnd(8, ' ');
+        const addr = 0x7fffffffe3e0 + Math.floor(i / 8) * 8;
+        if (addr <= 0x7fffffffe400) {
+          memory[addr] = `'${chunk}'`;
+        }
+      }
+    }
+
+    document.getElementById('btn-next').addEventListener('click', handleNextStep);
+    document.getElementById('btn-reset').addEventListener('click', handleReset);
+    document.getElementById('user-input').addEventListener('input', handleInput);
+
+    document.addEventListener('DOMContentLoaded', () => {
+      render();
+    });
+  </script>
+</body>
+</html>

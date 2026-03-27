@@ -1,0 +1,241 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>CTF-Pwn 实战演练</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <style>
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(-10px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+    .animate-fade-in {
+      animation: fadeIn 0.3s ease-out forwards;
+    }
+    .card-hover:hover {
+      transform: translateY(-5px);
+      box-shadow: 0 20px 40px rgba(0,0,0,0.3);
+    }
+  </style>
+</head>
+<body class="min-h-screen bg-gray-900 text-gray-200 p-6 font-mono selection:bg-blue-500/30">
+  <div class="max-w-6xl mx-auto space-y-6">
+    
+    <!-- Header -->
+    <div class="border-b border-gray-700 pb-4">
+      <div class="flex items-center justify-between">
+        <div>
+          <a href="../index.html" class="text-blue-400 hover:text-blue-300 text-sm flex items-center gap-1 mb-2">
+            <i data-lucide="arrow-left" class="w-4 h-4"></i>
+            返回首页
+          </a>
+          <h1 class="text-2xl font-bold text-white flex items-center gap-2">
+            <i data-lucide="terminal" class="w-6 h-6 text-green-400"></i>
+            CTF-Pwn 实战演练
+          </h1>
+          <p class="text-gray-400 mt-2">
+            学习真实的CTF题目源码，分析漏洞点，动手编译和解题。
+          </p>
+        </div>
+      </div>
+    </div>
+
+    <!-- How to Use -->
+    <div class="bg-blue-900/20 border border-blue-800/50 rounded-lg p-4">
+      <h3 class="text-blue-400 font-bold mb-2 flex items-center gap-2">
+        <i data-lucide="book-open" class="w-4 h-4"></i>
+        如何使用
+      </h3>
+      <div class="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
+        <div class="bg-gray-900/50 rounded p-3">
+          <div class="text-yellow-400 font-bold mb-1">1. 查看源码</div>
+          <p class="text-gray-400">学习每个题目的C/C++源码，理解程序逻辑和漏洞点</p>
+        </div>
+        <div class="bg-gray-900/50 rounded p-3">
+          <div class="text-green-400 font-bold mb-1">2. 编译运行</div>
+          <p class="text-gray-400">使用提供的gcc命令在本地编译，尝试利用漏洞</p>
+        </div>
+        <div class="bg-gray-900/50 rounded p-3">
+          <div class="text-red-400 font-bold mb-1">3. 编写脚本</div>
+          <p class="text-gray-400">参考模板脚本，编写Python利用代码获取flag</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- Challenges -->
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+      
+      <!-- Stack Overflow -->
+      <a href="ctf-stack-overflow.html" class="block animate-fade-in" style="animation-delay: 0.1s;">
+        <div class="bg-gray-800 rounded-xl border border-gray-700 p-6 card-hover transition-all duration-300 h-full">
+          <div class="flex items-center gap-3 mb-4">
+            <div class="w-12 h-12 bg-red-900/30 rounded-lg flex items-center justify-center">
+              <i data-lucide="layers" class="w-6 h-6 text-red-400"></i>
+            </div>
+            <div>
+              <h3 class="text-xl font-bold text-white">栈溢出 Basics</h3>
+              <span class="text-xs text-red-400">Stack Overflow</span>
+            </div>
+          </div>
+          <div class="space-y-2 text-sm text-gray-400 mb-4">
+            <div class="flex items-center gap-2">
+              <i data-lucide="file-code" class="w-4 h-4 text-gray-500"></i>
+              <span>3道题目</span>
+            </div>
+            <div class="flex items-center gap-2">
+              <i data-lucide="zap" class="w-4 h-4 text-gray-500"></i>
+              <span>gets/strcpy溢出</span>
+            </div>
+          </div>
+          <div class="flex items-center gap-2 text-blue-400 text-sm">
+            <span>开始实战</span>
+            <i data-lucide="arrow-right" class="w-4 h-4"></i>
+          </div>
+          <div class="mt-4 flex gap-2">
+            <span class="px-2 py-1 bg-red-900/30 text-red-400 text-xs rounded">入门</span>
+            <span class="px-2 py-1 bg-gray-700/50 text-gray-400 text-xs rounded">C语言</span>
+          </div>
+        </div>
+      </a>
+
+      <!-- Format String -->
+      <a href="ctf-format-string.html" class="block animate-fade-in" style="animation-delay: 0.2s;">
+        <div class="bg-gray-800 rounded-xl border border-gray-700 p-6 card-hover transition-all duration-300 h-full">
+          <div class="flex items-center gap-3 mb-4">
+            <div class="w-12 h-12 bg-yellow-900/30 rounded-lg flex items-center justify-center">
+              <i data-lucide="type" class="w-6 h-6 text-yellow-400"></i>
+            </div>
+            <div>
+              <h3 class="text-xl font-bold text-white">格式化字符串</h3>
+              <span class="text-xs text-yellow-400">Format String</span>
+            </div>
+          </div>
+          <div class="space-y-2 text-sm text-gray-400 mb-4">
+            <div class="flex items-center gap-2">
+              <i data-lucide="file-code" class="w-4 h-4 text-gray-500"></i>
+              <span>3道题目</span>
+            </div>
+            <div class="flex items-center gap-2">
+              <i data-lucide="zap" class="w-4 h-4 text-gray-500"></i>
+              <span>%x/%s/%n泄露写入</span>
+            </div>
+          </div>
+          <div class="flex items-center gap-2 text-blue-400 text-sm">
+            <span>开始实战</span>
+            <i data-lucide="arrow-right" class="w-4 h-4"></i>
+          </div>
+          <div class="mt-4 flex gap-2">
+            <span class="px-2 py-1 bg-yellow-900/30 text-yellow-400 text-xs rounded">入门</span>
+            <span class="px-2 py-1 bg-gray-700/50 text-gray-400 text-xs rounded">C语言</span>
+          </div>
+        </div>
+      </a>
+
+      <!-- ROP -->
+      <a href="ctf-rop.html" class="block animate-fade-in" style="animation-delay: 0.3s;">
+        <div class="bg-gray-800 rounded-xl border border-gray-700 p-6 card-hover transition-all duration-300 h-full">
+          <div class="flex items-center gap-3 mb-4">
+            <div class="w-12 h-12 bg-green-900/30 rounded-lg flex items-center justify-center">
+              <i data-lucide="git-branch" class="w-6 h-6 text-green-400"></i>
+            </div>
+            <div>
+              <h3 class="text-xl font-bold text-white">ROP 进阶</h3>
+              <span class="text-xs text-green-400">Return-Oriented Programming</span>
+            </div>
+          </div>
+          <div class="space-y-2 text-sm text-gray-400 mb-4">
+            <div class="flex items-center gap-2">
+              <i data-lucide="file-code" class="w-4 h-4 text-gray-500"></i>
+              <span>3道题目</span>
+            </div>
+            <div class="flex items-center gap-2">
+              <i data-lucide="zap" class="w-4 h-4 text-gray-500"></i>
+              <span>ret2libc/systm调用</span>
+            </div>
+          </div>
+          <div class="flex items-center gap-2 text-blue-400 text-sm">
+            <span>开始实战</span>
+            <i data-lucide="arrow-right" class="w-4 h-4"></i>
+          </div>
+          <div class="mt-4 flex gap-2">
+            <span class="px-2 py-1 bg-green-900/30 text-green-400 text-xs rounded">进阶</span>
+            <span class="px-2 py-1 bg-gray-700/50 text-gray-400 text-xs rounded">C语言</span>
+          </div>
+        </div>
+      </a>
+
+      <!-- Heap -->
+      <a href="ctf-heap.html" class="block animate-fade-in" style="animation-delay: 0.4s;">
+        <div class="bg-gray-800 rounded-xl border border-gray-700 p-6 card-hover transition-all duration-300 h-full">
+          <div class="flex items-center gap-3 mb-4">
+            <div class="w-12 h-12 bg-purple-900/30 rounded-lg flex items-center justify-center">
+              <i data-lucide="database" class="w-6 h-6 text-purple-400"></i>
+            </div>
+            <div>
+              <h3 class="text-xl font-bold text-white">堆漏洞入门</h3>
+              <span class="text-xs text-purple-400">Heap Exploitation</span>
+            </div>
+          </div>
+          <div class="space-y-2 text-sm text-gray-400 mb-4">
+            <div class="flex items-center gap-2">
+              <i data-lucide="file-code" class="w-4 h-4 text-gray-500"></i>
+              <span>3道题目</span>
+            </div>
+            <div class="flex items-center gap-2">
+              <i data-lucide="zap" class="w-4 h-4 text-gray-500"></i>
+              <span>UAF/double-free</span>
+            </div>
+          </div>
+          <div class="flex items-center gap-2 text-blue-400 text-sm">
+            <span>开始实战</span>
+            <i data-lucide="arrow-right" class="w-4 h-4"></i>
+          </div>
+          <div class="mt-4 flex gap-2">
+            <span class="px-2 py-1 bg-purple-900/30 text-purple-400 text-xs rounded">进阶</span>
+            <span class="px-2 py-1 bg-gray-700/50 text-gray-400 text-xs rounded">C语言</span>
+          </div>
+        </div>
+      </a>
+
+    </div>
+
+    <!-- Common Tools -->
+    <div class="bg-gray-800 rounded-lg border border-gray-700 p-6">
+      <h3 class="text-xl font-bold text-white mb-4 flex items-center gap-2">
+        <i data-lucide="wrench" class="w-5 h-5 text-gray-400"></i>
+        常用工具
+      </h3>
+      <div class="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+        <div class="bg-gray-900 rounded p-3">
+          <div class="text-green-400 font-bold">pwntools</div>
+          <div class="text-gray-400">Python漏洞利用框架</div>
+        </div>
+        <div class="bg-gray-900 rounded p-3">
+          <div class="text-green-400 font-bold">gdb</div>
+          <div class="text-gray-400">调试器 + pwndbg</div>
+        </div>
+        <div class="bg-gray-900 rounded p-3">
+          <div class="text-green-400 font-bold">ROPgadget</div>
+          <div class="text-gray-400">搜索gadgets</div>
+        </div>
+        <div class="bg-gray-900 rounded p-3">
+          <div class="text-green-400 font-bold">checksec</div>
+          <div class="text-gray-400">检查二进制保护</div>
+        </div>
+      </div>
+      <div class="mt-4 bg-yellow-900/20 border border-yellow-800/50 rounded p-3 text-sm">
+        <div class="text-yellow-400 font-bold mb-1">安装命令</div>
+        <code class="text-gray-300">pip install pwntools</code>
+        <code class="text-gray-300 ml-4">pip install ropgadget</code>
+      </div>
+    </div>
+
+  </div>
+
+  <script>
+    lucide.createIcons();
+  </script>
+</body>
+</html>

